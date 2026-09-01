@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Console Admin - DEK-DRIVSIM CyberCafe</title>
+    <!-- Tailwind CSS -->
+    <script src="/static/vendor/tailwind.min.js"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css">
+    <style>
+        body {
+            background-color: #04050a;
+        }
+        .animated-grid {
+            background-size: 50px 50px;
+            background-image: linear-gradient(to right, rgba(217, 70, 239, 0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(217, 70, 239, 0.02) 1px, transparent 1px);
+        }
+        .neon-glow-purple {
+            text-shadow: 0 0 10px #d946ef, 0 0 20px rgba(217, 70, 239, 0.5);
+        }
+        .neon-glow-cyan {
+            text-shadow: 0 0 10px #06b6d4, 0 0 20px rgba(6, 182, 212, 0.5);
+        }
+        .neon-border-purple {
+            border: 1px solid #d946ef;
+            box-shadow: 0 0 15px rgba(217, 70, 239, 0.2), inset 0 0 15px rgba(217, 70, 239, 0.05);
+        }
+        .neon-border-cyan {
+            border: 1px solid #06b6d4;
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.2), inset 0 0 15px rgba(6, 182, 212, 0.05);
+        }
+    </style>
+</head>
+<body class="text-slate-100 font-sans min-h-screen flex flex-col animated-grid">
+
+    <!-- TOP HEADER -->
+    <header class="bg-slate-950/95 border-b border-slate-800 sticky top-0 z-30 backdrop-blur-md shadow-2xl">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
+            <!-- Brand & Server Status -->
+            <div class="flex items-center gap-3">
+                <div class="relative">
+                    <div class="absolute -inset-1 rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 opacity-75 blur-sm animate-pulse"></div>
+                    <img src="/static/images/logo.png" alt="Logo" class="relative w-12 h-12 rounded-full border border-slate-800 object-cover">
+                </div>
+                <div>
+                    <h1 class="text-md sm:text-lg font-black tracking-widest text-white flex items-center gap-2 uppercase">
+                        <span id="header-cyber-name" class="neon-glow-purple">{{ settings.cyber_name }}</span>
+                        <span class="text-[9px] px-2 py-0.5 bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 font-bold rounded-full uppercase tracking-widest font-mono">CONSOLE PROPRIÉTAIRE</span>
+                    </h1>
+                    <p class="text-[10px] text-slate-500 font-mono">Wi-Fi local : <span class="font-bold text-slate-300 font-mono">{{ settings.wifi_ssid }}</span></p>
+                </div>
+            </div>
+
+            <!-- Server Link & Clock -->
+            <div class="flex items-center gap-4 text-xs font-mono">
+                <div class="text-right">
+                    <div id="live-clock" class="text-sm font-bold text-white">18:30:15</div>
+                    <div id="live-date" class="text-[9px] text-slate-500 uppercase">25 Juillet 2026</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- TOAST ALERTS -->
+    <div id="toast" class="hidden fixed bottom-6 right-6 z-50 p-4 bg-fuchsia-600 text-white rounded-2xl shadow-2xl flex items-center gap-2 text-xs font-bold font-mono border border-fuchsia-400/30">
+        <i class="fa-solid fa-circle-check text-lg"></i> <span id="toast-message">Action effectuée</span>
+    </div>
+
+    <!-- MAIN GRID CONTAINER -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        
+        <!-- FINANCIAL PERFORMANCE SUMMARY -->
+        <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Revenue Card -->
+            <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 flex items-center gap-4 shadow-xl">
+                <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl">
+                    <i class="fa-solid fa-wallet text-2xl"></i>
+                </div>
+                <div>
+                    <span class="text-slate-500 text-[10px] block uppercase font-bold tracking-widest font-mono">Caisse du jour</span>
+                    <strong id="stat-revenue" class="text-lg md:text-2xl font-black text-white font-mono">{{ summary.today_revenue }} <span class="text-xs text-emerald-400">{{ settings.currency }}</span></strong>
+                </div>
+            </div>
+
+            <!-- Tickets Sold -->
+            <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 flex items-center gap-4 shadow-xl">
+                <div class="p-3 bg-fuchsia-500/10 text-fuchsia-400 rounded-xl">
+                    <i class="fa-solid fa-ticket text-2xl"></i>
+                </div>
+                <div>
+                    <span class="text-slate-500 text-[10px] block uppercase font-bold tracking-widest font-mono">Tickets Émis</span>
+                    <strong id="stat-tickets" class="text-lg md:text-2xl font-black text-white font-mono">{{ summary.tickets_sold_today }}</strong>
+                </div>
+            </div>
+
+            <!-- Active Players Accounts -->
+            <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 flex items-center gap-4 shadow-xl">
+                <div class="p-3 bg-purple-500/10 text-purple-400 rounded-xl">
+                    <i class="fa-solid fa-users text-2xl"></i>
+                </div>
+                <div>
+                    <span class="text-slate-500 text-[10px] block uppercase font-bold tracking-widest font-mono">Joueurs Membres</span>
+                    <strong id="stat-players" class="text-lg md:text-2xl font-black text-white font-mono">{{ summary.active_players_count }}</strong>
+                </div>
+            </div>
+
+            <!-- Total All Time -->
+            <div class="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 flex items-center gap-4 shadow-xl">
+                <div class="p-3 bg-cyan-500/10 text-cyan-400 rounded-xl">
+                    <i class="fa-solid fa-chart-line text-2xl"></i>
+                </div>
+                <div>
+                    <span class="text-slate-500 text-[10px] block uppercase font-bold tracking-widest font-mono">Recette Cumulée</span>
+                    <strong id="stat-total" class="text-lg md:text-2xl font-black text-white font-mono">{{ summary.all_time_revenue }} <span class="text-xs text-cyan-400 font-bold">{{ settings.currency }}</span></strong>
+                </div>
+            </div>
+        </section>
+
+        <!-- CORE CONTROL SECTION: TERMINAL GRID -->
+        <section class="space-y-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h2 class="text-md sm:text-lg font-black tracking-widest text-white flex items-center gap-2 uppercase">
+                        <i class="fa-solid fa-network-wired text-fuchsia-500"></i> Supervision des Simulateurs
+                    </h2>
+                    <p class="text-xs text-slate-500">Contrôle instantané et monitoring d'activité des postes clients connectés.</p>
+                </div>
+                <button onclick="syncNow()" class="px-3.5 py-1.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-xl text-xs font-bold font-mono">
+                    <i class="fa-solid fa-rotate" id="sync-spinner"></i> Actualiser
+                </button>
+            </div>
+
+            <!-- PC/CONSOLE GRID -->
+            <div id="terminal-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <!-- Loaded Dynamically -->
+            </div>
+        </section>
+
+        <!-- CASHIER DAILY TRIAL EVALUATION SECTION (14 DAYS) -->
+        <section class="bg-slate-950/60 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+            <div>
+                <h2 class="text-md sm:text-lg font-black tracking-widest text-white flex items-center gap-2 uppercase">
+                    <i class="fa-solid fa-star text-fuchsia-500"></i> Évaluation Quotidienne du Gérant Caissier (Essai 14 Jours)
+                </h2>
+                <p class="text-xs text-slate-500 font-mono">Suivez et notez quotidiennement les performances de votre gérant (salaire de base + bonus par client parrainé).</p>
+            </div>
+
+            <!-- Grid of 14 Days -->
+            <div class="grid grid-cols-2 sm:grid-cols-7 gap-3">
+                {% for ev in evaluations %}
+                <button onclick="openEvaluationModal({{ ev.day_number }}, {{ ev.rating }}, '{{ ev.punctuality }}', '{{ ev.cash_accuracy }}', '{{ ev.notes | replace('\'', '\\\'') }}', {{ ev.recruits_count }})"
+                        class="p-3 border rounded-2xl flex flex-col justify-between items-center text-center transition-all hover:scale-[1.02] font-mono
+                        {% if ev.evaluated_at %} border-fuchsia-500/40 bg-fuchsia-950/10 {% else %} border-slate-800 bg-slate-900/30 hover:border-slate-700 {% endif %}">
+                    <span class="text-[10px] font-black uppercase text-slate-400">Jour {{ ev.day_number }}</span>
+                    
+                    <div class="my-2">
+                        {% if ev.evaluated_at %}
+                        <div class="flex text-fuchsia-400 text-[10px] gap-0.5 justify-center">
+                            {% for r in range(ev.rating) %}<i class="fa-solid fa-star"></i>{% endfor %}
+                        </div>
+                        <span class="text-[8px] text-slate-500 block mt-1">S. Brut: {{ 5000 + ev.recruits_count * 200 }} CFA</span>
+                        {% else %}
+                        <span class="text-xs text-slate-600 block">Non évalue</span>
+                        {% endif %}
+                    </div>
+
+                    <span class="text-[8px] px-2 py-0.5 rounded uppercase font-black
+                        {% if ev.evaluated_at %} bg-fuchsia-500/10 text-fuchsia-400 {% else %} bg-slate-800 text-slate-500 {% endif %}">
+                        {% if ev.evaluated_at %}Terminé{% else %}En attente{% endif %}
+                    </span>
+                </button>
+                {% endfor %}
+            </div>
+            
+            <!-- Warning block when 14 days complete -->
+            <div id="trial-complete-alert" class="hidden p-4 bg-fuchsia-500/10 border border-fuchsia-500/30 rounded-2xl flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <span class="p-3 bg-fuchsia-500/10 text-fuchsia-400 rounded-xl text-xl animate-pulse">
+                        <i class="fa-solid fa-file-signature"></i>
+                    </span>
+                    <div>
+                        <h4 class="text-xs font-bold text-white uppercase font-mono tracking-wider">Période d'essai des 14 jours complétée !</h4>
+                        <p class="text-[10px] text-slate-400 leading-relaxed font-mono">Le gérant caissier a complété sa période d'évaluation journalière. Vous pouvez à présent passer à un contrat de paiement hebdomadaire.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- DRIVING SCHOOLS & REFERRALS SECTION -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Driving Schools Accounts Manager (Left - 6 Cols) -->
+            <div class="lg:col-span-6 bg-slate-950/60 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-md sm:text-lg font-black tracking-widest text-white flex items-center gap-2 uppercase">
+                            <i class="fa-solid fa-car-side text-fuchsia-500"></i> Gestion des Auto-Écoles
+                        </h2>
+                        <p class="text-xs text-slate-500 font-mono">Gérez les comptes des gérants d'auto-écoles avec tarifs horaires préférentiels.</p>
+                    </div>
+                    <button onclick="toggleElement('school-create-form')" class="px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs font-bold text-fuchsia-500 font-mono">
+                        <i class="fa-solid fa-plus-circle"></i> Ajouter
+                    </button>
+                </div>
+
+                <!-- Create Driving School Form -->
+                <form id="school-create-form" onsubmit="createSchool(event)" class="hidden p-4 bg-slate-900 border border-slate-800 rounded-2xl space-y-3 font-mono text-xs">
+                    <h3 class="text-xs font-bold text-fuchsia-400 uppercase tracking-wider">Créer un compte Auto-École</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" id="school-name" placeholder="Nom de l'Auto-École" required class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500">
+                        <input type="text" id="school-instructor" placeholder="Nom du Gérant / Moniteur" required class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500">
+                        <input type="number" id="school-rate" placeholder="Tarif Spécial (Ex: 300 CFA/H)" required value="300" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500">
+                        <input type="number" id="school-balance" placeholder="Solde Initial (CFA)" value="0" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500">
+                    </div>
+                    <button type="submit" class="w-full py-2 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-lg text-xs uppercase tracking-wide">
+                        Créer le compte Auto-École
+                    </button>
+                </form>
+
+                <!-- Driving Schools List -->
+                <div class="max-h-56 overflow-y-auto border border-slate-800 rounded-xl bg-slate-900/40">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-950 text-slate-500 font-mono uppercase text-[9px] tracking-wider border-b border-slate-800">
+                            <tr>
+                                <th class="p-2.5">Auto-École</th>
+                                <th class="p-2.5">Tarif H.</th>
+                                <th class="p-2.5">Solde</th>
+                                <th class="p-2.5 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="schools-list-body" class="divide-y divide-slate-800 font-mono">
+                            {% for sch in schools %}
+                            <tr class="hover:bg-slate-900/30">
+                                <td class="p-2.5 font-bold text-white block truncate">
+                                    {{ sch.school_name }} <span class="text-[9px] text-slate-500 block font-normal">{{ sch.instructor_name }}</span>
+                                </td>
+                                <td class="p-2.5 text-fuchsia-400 font-bold">{{ sch.special_hourly_rate }} CFA/H</td>
+                                <td class="p-2.5 text-emerald-400 font-bold">{{ sch.balance }} CFA</td>
+                                <td class="p-2.5 text-right space-x-1 flex justify-end">
+                                    <button onclick="openSchoolRechargeModal({{ sch.id }}, '{{ sch.school_name }}')" class="px-2 py-1 bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-400 rounded text-[9px] font-bold">Créditer</button>
+                                    <button onclick="deleteSchool({{ sch.id }})" class="px-2 py-1 bg-red-600/10 border border-red-500/20 text-red-500 rounded text-[9px] font-bold">Supprimer</button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="p-4 text-center text-slate-500 italic">Aucune Auto-École enregistrée.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Referrals & Affiliation System (Right - 6 Cols) -->
+            <div class="lg:col-span-6 bg-slate-950/60 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+                <div>
+                    <h2 class="text-md sm:text-lg font-black tracking-widest text-white flex items-center gap-2 uppercase">
+                        <i class="fa-solid fa-gift text-fuchsia-500"></i> Affiliations & Parrainages
+                    </h2>
+                    <p class="text-xs text-slate-500 font-mono">Validez les parrainages effectués par les membres, les tickets d'accès temporaires ou le caissier.</p>
+                </div>
+
+                <!-- Referrals table -->
+                <div class="max-h-72 overflow-y-auto border border-slate-800 rounded-xl bg-slate-900/40">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-950 text-slate-500 font-mono uppercase text-[9px] tracking-wider border-b border-slate-800">
+                            <tr>
+                                <th class="p-2.5">Code Parrain</th>
+                                <th class="p-2.5">Nouveau Client</th>
+                                <th class="p-2.5">Bonus Accordé</th>
+                                <th class="p-2.5 text-right">État</th>
+                            </tr>
+                        </thead>
+                        <tbody id="referrals-list-body" class="divide-y divide-slate-800 font-mono">
+                            {% for ref in referrals %}
+                            <tr class="hover:bg-slate-900/30">
+                                <td class="p-2.5 font-bold text-fuchsia-400">
+                                    {{ ref.referrer_code }} <span class="text-[9px] text-slate-500 block font-normal uppercase">{{ ref.referrer_type }}</span>
+                                </td>
+                                <td class="p-2.5 text-white font-medium">{{ ref.referred_username }}</td>
+                                <td class="p-2.5 text-slate-300">
+                                    {% if ref.bonus_type == 'free_session' %}Session Gratuite 30m{% elif ref.bonus_type == '50_percent_discount' %}Ticket 50% de réduction{% else %}Bonus Caissier +200 CFA{% endif %}
+                                </td>
+                                <td class="p-2.5 text-right">
+                                    {% if ref.status == 'pending' %}
+                                    <button onclick="claimReferral({{ ref.id }})" class="px-2.5 py-1 bg-fuchsia-600 text-white rounded text-[9px] font-bold shadow-md shadow-fuchsia-500/15 uppercase">Délivrer</button>
+                                    {% else %}
+                                    <span class="text-[9px] px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded uppercase font-bold">Validé</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="p-4 text-center text-slate-500 italic">Aucun parrainage enregistré.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- CENTRE DE RAPPORTS ET IMPRESSION & GENERATEUR TICKETS -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Ticket Generator (Left - 5 Cols) -->
+            <div class="lg:col-span-5 bg-slate-950/60 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+                <div>
+                    <h2 class="text-md sm:text-lg font-black tracking-widest text-white flex items-center gap-2 uppercase">
+                        <i class="fa-solid fa-ticket-simple text-fuchsia-500"></i> Générateur de Tickets
+                    </h2>
+                    <p class="text-xs text-slate-500 font-mono">Générez des tickets d'accès. Ils seront immédiatement stockés et visibles chez le caissier pour la vente !</p>
+                </div>
+
+                <form onsubmit="generateTickets(event)" class="space-y-4 font-mono text-xs">
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Nombre</label>
+                            <input type="number" id="ticket-qty" value="5" min="1" max="50" required
+                                   class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-center font-bold text-white focus:outline-none focus:border-fuchsia-500">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Durée</label>
+                            <select id="ticket-duration" required onchange="autoFillPrice()"
+                                    class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 font-bold text-white focus:outline-none focus:border-fuchsia-500 text-[10px]">
+                                <option value="60">1 Heure</option>
+                                <option value="120">2 Heures</option>
+                                <option value="180">3 Heures</option>
+                                <option value="300">5 Heures</option>
+                                <option value="600">10 Heures</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1">Prix (CFA)</label>
+                            <input type="number" id="ticket-price" value="500" min="0" required
+                                   class="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-center font-bold text-white focus:outline-none focus:border-fuchsia-500">
+                        </div>
+                    </div>
+
+                    <button type="submit" id="btn-gen-tck" class="w-full py-3 bg-gradient-to-r from-fuchsia-600 to-fuchsia-500 text-white font-bold rounded-xl text-xs tracking-widest uppercase shadow-lg shadow-fuchsia-600/10 hover:shadow-fuchsia-500/20 transition-all flex items-center justify-center gap-2 border border-fuchsia-500/20 font-mono">
+                        Émettre & Transmettre <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </form>
+
+                <!-- Active Tickets Table -->
+                <div class="border-t border-slate-800/80 pt-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Tickets en Caisse</h4>
+                        <a href="/admin/tickets/print" target="_blank" class="px-2.5 py-1 bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20 rounded text-[10px] font-bold hover:bg-fuchsia-500 hover:text-white transition-all flex items-center gap-1 font-mono">
+                            <i class="fa-solid fa-print"></i> Mode Impression
+                        </a>
+                    </div>
+
+                    <div class="max-h-56 overflow-y-auto border border-slate-800/50 rounded-xl bg-slate-900/40">
+                        <table class="w-full text-xs text-left">
+                            <thead class="bg-slate-950 text-slate-500 sticky top-0 uppercase text-[8px] tracking-wider border-b border-slate-800 font-mono">
+                                <tr>
+                                    <th class="p-2 text-center">CODE PIN</th>
+                                    <th class="p-2">Durée</th>
+                                    <th class="p-2">Tarif</th>
+                                    <th class="p-2 text-center">État</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tickets-list-body" class="divide-y divide-slate-800">
+                                {% for ticket in tickets[:10] %}
+                                <tr class="hover:bg-slate-900/50">
+                                    <td class="p-2 text-center font-mono font-bold text-fuchsia-400">{{ ticket.code }}</td>
+                                    <td class="p-2 font-medium font-mono">{{ ticket.duration_mins }} min</td>
+                                    <td class="p-2 font-semibold text-slate-300 font-mono">{{ ticket.price }} CFA</td>
+                                    <td class="p-2 text-center font-mono">
+                                        <span class="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase
+                                            {% if ticket.status == 'active' %} bg-cyan-500/10 text-cyan-400 border border-cyan-500/20
+                                            {% else %} bg-slate-800 text-slate-500 border border-slate-700 {% endif %}">
+                                            {{ ticket.status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="p-4 text-center text-slate-500 italic font-mono">Aucun ticket disponible</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reports and system Settings (Right - 7 Cols) -->
+            <div class="lg:col-span-7 bg-slate-950/60 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+                <!-- Reports Center -->
+                <div id="reports-print-section" class="space-y-4">
+                    <div>
+                        <h2 class="text-md sm:text-lg font-black tracking-widest text-white flex items-center gap-2 uppercase">
+                            <i class="fa-solid fa-print text-fuchsia-500"></i> Rapports Financiers
+                        </h2>
+                        <p class="text-xs text-slate-500 font-mono">Générez et imprimez des bilans d'encaissements périodiques.</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-2 font-mono">
+                        <a href="/admin/reports/print?period=daily" target="_blank" class="p-3 bg-slate-900 border border-slate-800 hover:border-fuchsia-500 rounded-xl flex items-center justify-between text-xs font-bold hover:scale-[1.02] transition-all">
+                            <span>Rapport Journalier</span> <i class="fa-solid fa-calendar-day text-fuchsia-400"></i>
+                        </a>
+                        <a href="/admin/reports/print?period=weekly" target="_blank" class="p-3 bg-slate-900 border border-slate-800 hover:border-fuchsia-500 rounded-xl flex items-center justify-between text-xs font-bold hover:scale-[1.02] transition-all">
+                            <span>Rapport Hebdomadaire</span> <i class="fa-solid fa-calendar-week text-fuchsia-400"></i>
+                        </a>
+                        <a href="/admin/reports/print?period=monthly" target="_blank" class="p-3 bg-slate-900 border border-slate-800 hover:border-fuchsia-500 rounded-xl flex items-center justify-between text-xs font-bold hover:scale-[1.02] transition-all">
+                            <span>Rapport Mensuel</span> <i class="fa-solid fa-calendar-days text-fuchsia-400"></i>
+                        </a>
+                        <a href="/admin/reports/print?period=yearly" target="_blank" class="p-3 bg-slate-900 border border-slate-800 hover:border-fuchsia-500 rounded-xl flex items-center justify-between text-xs font-bold hover:scale-[1.02] transition-all">
+                            <span>Rapport Annuel (Exercice)</span> <i class="fa-solid fa-calendar text-fuchsia-400"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Global Settings -->
+                <div class="border-t border-slate-800/80 pt-6 space-y-4">
+                    <div>
+                        <h3 class="text-sm font-extrabold text-white flex items-center gap-1.5 uppercase tracking-wide font-mono text-fuchsia-400">
+                            <i class="fa-solid fa-sliders text-fuchsia-500"></i> Configuration Système & Wi-Fi
+                        </h3>
+                    </div>
+
+                    <form onsubmit="saveSettings(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-900/40 p-4 border border-slate-800 rounded-2xl font-mono text-xs">
+                        <div class="sm:col-span-2">
+                            <label class="block text-[8px] font-bold text-slate-500 uppercase mb-1">Nom du Cybercafe</label>
+                            <input type="text" id="setting-cyber-name" value="{{ settings.cyber_name }}" required
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500">
+                        </div>
+                        <div>
+                            <label class="block text-[8px] font-bold text-slate-500 uppercase mb-1">SSID WiFi (Routeur)</label>
+                            <input type="text" id="setting-wifi-ssid" value="{{ settings.wifi_ssid }}" required
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500 font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-[8px] font-bold text-slate-500 uppercase mb-1">Clé WiFi</label>
+                            <input type="text" id="setting-wifi-password" value="{{ settings.wifi_password }}" required
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500 font-mono">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-[8px] font-bold text-slate-500 uppercase mb-1">Tarif de Base (CFA / H)</label>
+                            <input type="number" id="setting-hourly-rate" value="{{ settings.hourly_rate }}" required
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500 font-bold">
+                        </div>
+                        <div class="sm:col-span-2 flex items-end">
+                            <button type="submit" id="btn-save-settings" class="w-full py-2.5 bg-gradient-to-r from-fuchsia-600 to-fuchsia-500 text-white font-bold rounded-lg text-xs uppercase tracking-widest transition-all border border-fuchsia-500/20 shadow">
+                                <i class="fa-solid fa-save"></i> Enregistrer
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- JOURNAL DES CONNEXIONS ET EXPORT CSV -->
+        <section class="bg-slate-950/60 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                    <h2 class="text-md sm:text-lg font-black tracking-widest text-white flex items-center gap-2 uppercase font-sans">
+                        <i class="fa-solid fa-list-check text-fuchsia-500"></i> Journal de Connexion des Utilisateurs
+                    </h2>
+                    <p class="text-xs text-slate-500 font-mono">Consultez l'historique complet des sessions démarrées (Admin, Caissier, Joueurs, Tickets).</p>
+                </div>
+                <!-- Export to CSV Button -->
+                <a href="/admin/connection-logs/csv" class="px-4 py-2 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-fuchsia-600/10 transition-all font-mono border border-fuchsia-500/20">
+                    <i class="fa-solid fa-file-csv"></i> Télécharger en CSV
+                </a>
+            </div>
+
+            <!-- Connection Logs Table -->
+            <div class="overflow-x-auto border border-slate-800 rounded-2xl bg-slate-900/40 font-mono">
+                <table class="w-full text-xs text-left min-w-[600px]">
+                    <thead class="bg-slate-950 text-slate-500 uppercase text-[8px] tracking-wider border-b border-slate-800 font-mono">
+                        <tr>
+                            <th class="p-3">ID Log</th>
+                            <th class="p-3">Utilisateur / Compte</th>
+                            <th class="p-3">Simulateur</th>
+                            <th class="p-3">Type</th>
+                            <th class="p-3">Heure Connexion</th>
+                            <th class="p-3">Heure Déconnexion</th>
+                            <th class="p-3 text-right">Durée</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800">
+                        {% for log in connection_logs %}
+                        <tr class="hover:bg-slate-900/50">
+                            <td class="p-3 text-slate-500">#{{ log.id }}</td>
+                            <td class="p-3 font-bold text-white">{{ log.username }}</td>
+                            <td class="p-3">{{ log.terminal_name }}</td>
+                            <td class="p-3">
+                                <span class="px-2 py-0.5 rounded text-[8px] font-bold uppercase
+                                    {% if log.session_type == 'admin' %} bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20
+                                    {% elif log.session_type == 'cashier' %} bg-cyan-500/10 text-cyan-400 border border-cyan-500/20
+                                    {% elif log.session_type == 'ticket' %} bg-indigo-500/10 text-indigo-400 border border-indigo-500/20
+                                    {% else %} bg-slate-800 text-slate-300 border border-slate-700 {% endif %}">
+                                    {{ log.session_type.upper() }}
+                                </span>
+                            </td>
+                            <td class="p-3 text-slate-400 font-mono">{{ log.login_time | replace('T', ' ') | truncate(16, True, '') }}</td>
+                            <td class="p-3 text-slate-400 font-mono">
+                                {% if log.logout_time %}
+                                {{ log.logout_time | replace('T', ' ') | truncate(16, True, '') }}
+                                {% else %}
+                                <span class="text-emerald-400 font-bold"><i class="fa-solid fa-circle-play text-[8px] animate-pulse mr-1 font-sans"></i> EN COURS</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-3 text-right font-bold text-fuchsia-400 font-mono">
+                                {% if log.logout_time %}
+                                {{ log.duration_mins }} min
+                                {% else %}
+                                --
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="p-6 text-center text-slate-500 italic font-mono">Aucun historique de connexion enregistré.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- TRANSACTION LOG HISTORY -->
+        <section class="bg-slate-950/60 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+            <div>
+                <h2 class="text-md sm:text-lg font-black tracking-widest text-white flex items-center gap-2 uppercase">
+                    <i class="fa-solid fa-receipt text-fuchsia-500"></i> Journal Global des Transactions de Caisse
+                </h2>
+                <p class="text-xs text-slate-500 font-mono">Consultez l'historique complet des encaissements effectués par l'ensemble de l'équipe.</p>
+            </div>
+
+            <div class="overflow-x-auto border border-slate-800/50 rounded-2xl bg-slate-900/40 font-mono">
+                <table class="w-full text-xs text-left min-w-[600px]">
+                    <thead class="bg-slate-950 text-slate-500 uppercase text-[8px] tracking-wider border-b border-slate-800 font-mono">
+                        <tr>
+                            <th class="p-3">Numéro</th>
+                            <th class="p-3">Type</th>
+                            <th class="p-3">Description</th>
+                            <th class="p-3">Heure</th>
+                            <th class="p-3 text-right">Montant perçu</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactions-list-body" class="divide-y divide-slate-800">
+                        {% for tx in summary.recent_transactions %}
+                        <tr class="hover:bg-slate-900/50">
+                            <td class="p-3 font-semibold text-slate-500">#{{ tx.id }}</td>
+                            <td class="p-3">
+                                <span class="px-2 py-0.5 rounded text-[8px] font-bold uppercase
+                                    {% if tx.type == 'ticket_sale' %} bg-fuchsia-500/15 text-fuchsia-400 border border-fuchsia-500/20
+                                    {% elif tx.type == 'player_recharge' %} bg-purple-500/15 text-purple-400 border border-purple-500/20
+                                    {% else %} bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 {% endif %}">
+                                    {% if tx.type == 'ticket_sale' %}Ticket{% elif tx.type == 'player_recharge' %}Recharge{% else %}Fin Session{% endif %}
+                                </span>
+                            </td>
+                            <td class="p-3 font-medium text-slate-300 font-sans">{{ tx.description }}</td>
+                            <td class="p-3 text-slate-400">{{ tx.created_at | replace('T', ' ') | truncate(16, True, '') }}</td>
+                            <td class="p-3 text-right font-black text-emerald-400">+{{ tx.amount }} CFA</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="p-6 text-center text-slate-500 italic">Aucune transaction enregistrée.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-slate-950/80 border-t border-slate-900/80 py-6 text-center text-xs text-slate-500 font-mono">
+        <p>&copy; 2026 DEK-DRIVSIM CyberCafe. Tous droits réservés.</p>
+    </footer>
+
+    <!-- --- POPUPS / MODALS --- -->
+
+    <!-- 1. LAUNCH SESSION MODAL -->
+    <div id="start-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative neon-border-purple">
+            <button onclick="closeStartModal()" class="absolute right-4 top-4 text-slate-400 hover:text-slate-200">
+                <i class="fa-solid fa-times text-lg"></i>
+            </button>
+            <h3 class="text-md font-bold text-white mb-2 flex items-center gap-2 font-mono uppercase">
+                <i class="fa-solid fa-play text-fuchsia-500"></i> Lancer Session : <span id="start-modal-term-name">Poste</span>
+            </h3>
+            <p class="text-xs text-slate-500 mb-6">Démarrez un poste de jeu à distance.</p>
+
+            <input type="hidden" id="start-modal-term-id">
+
+            <div class="flex gap-1.5 p-1 bg-slate-950 border border-slate-800 rounded-xl mb-6 font-mono text-[10px]">
+                <button onclick="setModalTab('ticket')" id="modal-tab-ticket" class="flex-1 py-2 font-bold rounded-lg bg-fuchsia-600 text-white transition-all uppercase">
+                    Ticket
+                </button>
+                <button onclick="setModalTab('player')" id="modal-tab-player" class="flex-1 py-2 font-bold rounded-lg text-slate-400 hover:text-slate-200 transition-all uppercase">
+                    Joueur
+                </button>
+                <button onclick="setModalTab('postpaid')" id="modal-tab-postpaid" class="flex-1 py-2 font-bold rounded-lg text-slate-400 hover:text-slate-200 transition-all uppercase">
+                    Libre-accès
+                </button>
+            </div>
+
+            <!-- PREPAID TICKET -->
+            <div id="modal-form-ticket" class="space-y-4">
+                <div>
+                    <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1.5 font-mono">Code Ticket</label>
+                    <div class="relative">
+                        <input type="text" id="modal-ticket-code" placeholder="Saisir code PIN" required
+                               class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-fuchsia-500 uppercase tracking-wider font-mono">
+                        <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500">
+                            <i class="fa-solid fa-key"></i>
+                        </span>
+                    </div>
+                </div>
+                <button onclick="submitLaunch('ticket')" class="w-full py-3 bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold rounded-xl uppercase tracking-widest transition-all font-mono">
+                    Démarrer par Ticket
+                </button>
+            </div>
+
+            <!-- REGISTERED PLAYER -->
+            <div id="modal-form-player" class="hidden space-y-4">
+                <div class="space-y-3 font-mono text-xs">
+                    <div>
+                        <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1.5">Compte Joueur</label>
+                        <select id="modal-player-username" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-300 focus:outline-none focus:border-fuchsia-500">
+                            <option value="">-- Sélectionner --</option>
+                            {% for player in players %}
+                            <option value="{{ player.username }}">{{ player.username }} (Solde : {{ player.balance }} CFA)</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1.5">Confirmation Mot de passe</label>
+                        <input type="password" id="modal-player-pwd" placeholder="Saisir mot de passe joueur"
+                               class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white focus:outline-none focus:border-fuchsia-500">
+                    </div>
+                </div>
+                <button onclick="submitLaunch('player')" class="w-full py-3 bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold rounded-xl uppercase tracking-widest transition-all font-mono">
+                    Démarrer par Joueur
+                </button>
+            </div>
+
+            <!-- POSTPAID -->
+            <div id="modal-form-postpaid" class="hidden space-y-4 text-center font-mono text-xs">
+                <div class="p-4 bg-slate-950 border border-slate-800 rounded-2xl text-slate-500">
+                    Le poste démarrera en Libre-accès facturé selon la durée d'utilisation réelle.
+                </div>
+                <button onclick="submitLaunch('postpaid')" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl uppercase tracking-widest transition-all">
+                    Lancer Libre-Accès
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. AUTO-ÉCOLES RECHARGE MODAL -->
+    <div id="school-recharge-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl relative neon-border-purple">
+            <button onclick="closeSchoolRechargeModal()" class="absolute right-4 top-4 text-slate-400 hover:text-slate-200">
+                <i class="fa-solid fa-times text-lg"></i>
+            </button>
+            <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2 font-mono uppercase">
+                <i class="fa-solid fa-credit-card text-fuchsia-500"></i> Créditer Auto-École
+            </h3>
+            <p class="text-xs text-slate-500 mb-6">Rechargez le compte de l'établissement : <strong class="text-white" id="recharge-school-name">Auto-École</strong></p>
+
+            <input type="hidden" id="recharge-school-id">
+
+            <div class="space-y-4 font-mono">
+                <div>
+                    <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1.5">Montant à créditer (FCFA)</label>
+                    <input type="number" id="recharge-school-amount" value="5000" min="100" required
+                           class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-center text-lg font-black text-white focus:outline-none focus:border-fuchsia-500">
+                </div>
+                <button onclick="submitSchoolRecharge()" class="w-full py-3 bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold rounded-xl uppercase tracking-widest transition-all">
+                    Créditer le compte Auto-École
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. CASHIER EVALUATION DIALOG BOX MODAL -->
+    <div id="evaluation-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative neon-border-purple font-mono">
+            <button onclick="closeEvaluationModal()" class="absolute right-4 top-4 text-slate-400 hover:text-slate-200">
+                <i class="fa-solid fa-times text-lg"></i>
+            </button>
+            <h3 class="text-md font-bold text-white mb-1 uppercase flex items-center gap-2 text-fuchsia-400">
+                <i class="fa-solid fa-file-signature"></i> Évaluer Jour <span id="eval-day-num">X</span>
+            </h3>
+            <p class="text-[10px] text-slate-500 mb-6">Établissez la performance et calculez le salaire journalier.</p>
+
+            <input type="hidden" id="eval-day-number-input">
+
+            <form onsubmit="submitEvaluation(event)" class="space-y-4 text-xs">
+                <!-- Stars Rating -->
+                <div>
+                    <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1.5">Note de Performance (Étoiles)</label>
+                    <select id="eval-rating" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white focus:outline-none focus:border-fuchsia-500">
+                        <option value="5">⭐⭐⭐⭐• 5 Étoiles (Excellent)</option>
+                        <option value="4">⭐⭐⭐•• 4 Étoiles (Très Bien)</option>
+                        <option value="3">⭐⭐••• 3 Étoiles (Moyen)</option>
+                        <option value="2">⭐•••• 2 Étoiles (Médiéocre)</option>
+                        <option value="1">••••• 1 Étoile (Insuffisant)</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <!-- Punctuality -->
+                    <div>
+                        <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1.5">Ponctualité</label>
+                        <select id="eval-punctuality" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white focus:outline-none focus:border-fuchsia-500">
+                            <option value="good">Présent / À l'heure</option>
+                            <option value="late">En retard</option>
+                            <option value="absent">Absent</option>
+                        </select>
+                    </div>
+
+                    <!-- Cash Accuracy -->
+                    <div>
+                        <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1.5">Régularité Caisse</label>
+                        <select id="eval-cash" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-white focus:outline-none focus:border-fuchsia-500">
+                            <option value="exact">Caisse Exacte</option>
+                            <option value="short">Manque d'argent</option>
+                            <option value="over">Surplus d'argent</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Recruits counter (Pull dynamically) -->
+                <div class="p-3 bg-slate-950 border border-slate-800 rounded-xl flex justify-between items-center text-xs">
+                    <span class="text-slate-500">Recrutements Clients :</span>
+                    <strong class="text-fuchsia-400 font-bold"><span id="eval-recruits-text">0</span> joueur(s)</strong>
+                </div>
+
+                <!-- Salary computation preview -->
+                <div class="p-3 bg-fuchsia-500/5 border border-fuchsia-500/10 rounded-xl text-xs space-y-1">
+                    <div class="flex justify-between text-slate-500">
+                        <span>Salaire de base :</span>
+                        <span>5 000 CFA</span>
+                    </div>
+                    <div class="flex justify-between text-slate-500">
+                        <span>Bonus parrainage (200F x <span id="eval-bonus-count">0</span>) :</span>
+                        <span id="eval-bonus-amount">0 CFA</span>
+                    </div>
+                    <div class="flex justify-between font-bold text-white border-t border-slate-800/80 pt-1">
+                        <span>NET À PAYER :</span>
+                        <span id="eval-net-amount" class="text-emerald-400 font-bold">5 000 CFA</span>
+                    </div>
+                </div>
+
+                <!-- Evaluation Notes -->
+                <div>
+                    <label class="block text-[9px] font-bold text-slate-500 uppercase mb-1.5">Observations / Remarques</label>
+                    <textarea id="eval-notes" placeholder="Rédiger une observation sur la journée de travail..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white h-20 focus:outline-none focus:border-fuchsia-500 resize-none"></textarea>
+                </div>
+
+                <button type="submit" class="w-full py-3 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-xl uppercase tracking-wider transition-all shadow shadow-fuchsia-500/20">
+                    Enregistrer l'évaluation
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 4. REAL-TIME REMOTE SCREEN MONITOR MODAL -->
+    <div id="remote-modal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl relative flex flex-col neon-border-cyan">
+            <!-- Header -->
+            <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/50">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></span>
+                    <h3 class="text-md font-bold text-white font-mono uppercase">Visualisation en Direct : <span id="remote-modal-term-name">PC-01</span></h3>
+                </div>
+                <button onclick="closeRemoteView()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-times text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Remote screen rendering container -->
+            <div class="bg-slate-950 p-4 flex items-center justify-center relative aspect-video overflow-hidden">
+                <div class="w-full h-full rounded border border-slate-800 flex items-center justify-center bg-cover bg-center" id="remote-screen-img"
+                     style="background-image: url('/static/images/bg/game-1.jpg');">
+                    
+                    <div class="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex flex-col justify-between p-4">
+                        <div class="flex justify-between items-start font-mono">
+                            <span class="px-2 py-0.5 bg-fuchsia-600 text-white rounded text-[9px] font-bold">192.168.1.104</span>
+                            <div class="bg-slate-950/95 border border-fuchsia-500/30 px-3 py-1 rounded-lg text-right">
+                                <span id="remote-mock-user" class="text-[9px] font-bold text-white block">Joueur : GamerPro</span>
+                                <span id="remote-mock-time" class="text-[8px] text-fuchsia-400 font-bold block font-mono">Restant : 01:23:14</span>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center text-[10px] text-white/70 bg-black/70 rounded px-3 py-1.5 self-center max-w-xs border border-white/10 font-mono">
+                            <i class="fa-solid fa-car-side text-fuchsia-500 mr-1 animate-pulse"></i> Visualisation Simulateur Active
+                        </div>
+                        
+                        <div class="flex justify-between items-center text-[8px] text-white/40 font-mono">
+                            <span>FPS: 30 | LATENCE: 5ms | QUALITÉ: ULTRA</span>
+                            <span>DEK-DRIVSIM CONTROL</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Remote control system operations footer -->
+            <div class="p-4 bg-slate-950 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono">
+                <button onclick="showToast('Message de notification envoyé au poste !')" class="py-2 bg-slate-900 hover:bg-slate-800 rounded-xl text-xs text-slate-300 font-semibold flex items-center justify-center gap-1.5 border border-slate-800">
+                    <i class="fa-solid fa-comment-dots text-fuchsia-500"></i> Message
+                </button>
+                <button onclick="showToast('Saisie clavier/volant verrouillée à distance !')" class="py-2 bg-slate-900 hover:bg-slate-800 rounded-xl text-xs text-slate-300 font-semibold flex items-center justify-center gap-1.5 border border-slate-800">
+                    <i class="fa-solid fa-user-lock text-fuchsia-500"></i> Bloquer Volant
+                </button>
+                <button onclick="showToast('Commande de redémarrage envoyée au PC.')" class="py-2 bg-slate-900 hover:bg-slate-800 rounded-xl text-xs text-slate-300 font-semibold flex items-center justify-center gap-1.5 border border-slate-800">
+                    <i class="fa-solid fa-rotate-left text-amber-500"></i> Redémarrer
+                </button>
+                <button onclick="showToast('Commande d\'extinction envoyée au PC.')" class="py-2 bg-red-600/10 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 border border-red-500/20">
+                    <i class="fa-solid fa-power-off"></i> Éteindre PC
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN JAVASCRIPT LOGIC -->
+    <script>
+        let modalActiveTab = 'ticket';
+
+        // Display digital clock
+        function startClock() {
+            setInterval(() => {
+                const now = new Date();
+                const clock = document.getElementById('live-clock');
+                const dateDiv = document.getElementById('live-date');
+                if (clock) clock.textContent = now.toLocaleTimeString('fr-FR');
+                if (dateDiv) {
+                    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                    dateDiv.textContent = now.toLocaleDateString('fr-FR', options);
+                }
+            }, 1000);
+        }
+        startClock();
+
+        // Toggle elements helper
+        function toggleElement(id) {
+            const el = document.getElementById(id);
+            if (el) el.classList.toggle('hidden');
+        }
+
+        // Show customizable Toast
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Check if evaluations of 14 days complete
+        document.addEventListener("DOMContentLoaded", () => {
+            const incompleteDays = {{ incomplete_days_count }};
+            if (incompleteDays === 0) {
+                document.getElementById('trial-complete-alert').classList.remove('hidden');
+            }
+        });
+
+        // --- ACTIVE SESSION CONTROL ACTIONS ---
+
+        async function pauseSession(id) {
+            if (!confirm("Voulez-vous suspendre cette session ?")) return;
+            try {
+                const response = await fetch(`/api/terminal/${id}/pause`, { method: 'POST' });
+                const res = await response.json();
+                if (res.success) {
+                    showToast("Session mise en pause.");
+                    syncNow();
+                } else {
+                    alert(res.message);
+                }
+            } catch (err) {
+                alert("Erreur de connexion");
+            }
+        }
+
+        async function resumeSession(id) {
+            try {
+                const response = await fetch(`/api/terminal/${id}/resume`, { method: 'POST' });
+                const res = await response.json();
+                if (res.success) {
+                    showToast("Session reprise avec succès.");
+                    syncNow();
+                } else {
+                    alert(res.message);
+                }
+            } catch (err) {
+                alert("Erreur de connexion");
+            }
+        }
+
+        async function stopSession(id) {
+            if (!confirm("Couper la session ? Le temps écoulé sera comptabilisé et déduit du compte joueur ou facturé.")) return;
+            try {
+                const response = await fetch(`/api/terminal/${id}/stop`, { method: 'POST' });
+                const res = await response.json();
+                if (res.success) {
+                    showToast("Session arrêtée et enregistrée en caisse.");
+                    syncNow();
+                } else {
+                    alert(res.message);
+                }
+            } catch (err) {
+                alert("Erreur de connexion");
+            }
+        }
+
+        // --- POPUP MODALS MANAGEMENT ---
+
+        // 1. Démarrer Session Modal
+        function openStartModal(termId, termName) {
+            document.getElementById('start-modal-term-id').value = termId;
+            document.getElementById('start-modal-term-name').textContent = termName;
+            document.getElementById('start-modal').classList.remove('hidden');
+            setModalTab('ticket');
+        }
+
+        function closeStartModal() {
+            document.getElementById('start-modal').classList.add('hidden');
+        }
+
+        function setModalTab(tab) {
+            modalActiveTab = tab;
+            const btnTicket = document.getElementById('modal-tab-ticket');
+            const btnPlayer = document.getElementById('modal-tab-player');
+            const btnPostpaid = document.getElementById('modal-tab-postpaid');
+            
+            const formTicket = document.getElementById('modal-form-ticket');
+            const formPlayer = document.getElementById('modal-form-player');
+            const formPostpaid = document.getElementById('modal-form-postpaid');
+
+            btnTicket.className = "flex-1 py-2 text-xs font-bold rounded-lg text-slate-400 hover:text-slate-200 transition-all uppercase";
+            btnPlayer.className = "flex-1 py-2 text-xs font-bold rounded-lg text-slate-400 hover:text-slate-200 transition-all uppercase";
+            btnPostpaid.className = "flex-1 py-2 text-xs font-bold rounded-lg text-slate-400 hover:text-slate-200 transition-all uppercase";
+            
+            formTicket.classList.add('hidden');
+            formPlayer.classList.add('hidden');
+            formPostpaid.classList.add('hidden');
+
+            if (tab === 'ticket') {
+                btnTicket.className = "flex-1 py-2 text-xs font-bold rounded-lg bg-fuchsia-600 text-white transition-all uppercase";
+                formTicket.classList.remove('hidden');
+            } else if (tab === 'player') {
+                btnPlayer.className = "flex-1 py-2 text-xs font-bold rounded-lg bg-fuchsia-600 text-white transition-all uppercase";
+                formPlayer.classList.remove('hidden');
+            } else if (tab === 'postpaid') {
+                btnPostpaid.className = "flex-1 py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white transition-all uppercase";
+                formPostpaid.classList.remove('hidden');
+            }
+        }
+
+        async function submitLaunch(type) {
+            const termId = document.getElementById('start-modal-term-id').value;
+            const bodyData = { session_type: type };
+
+            if (type === 'ticket') {
+                const code = document.getElementById('modal-ticket-code').value.trim();
+                if (!code) {
+                    alert("Veuillez entrer un code ticket");
+                    return;
+                }
+                bodyData.code = code;
+            } 
+            else if (type === 'player') {
+                const selectEl = document.getElementById('modal-player-username');
+                const username = selectEl.value;
+                const pwd = document.getElementById('modal-player-pwd').value.trim();
+                
+                if (!username || !pwd) {
+                    alert("Veuillez sélectionner un compte joueur et confirmer son mot de passe");
+                    return;
+                }
+                bodyData.username = username;
+                bodyData.password = pwd;
+            }
+
+            try {
+                const response = await fetch(`/api/terminal/${termId}/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bodyData)
+                });
+                const res = await response.json();
+                if (res.success) {
+                    closeStartModal();
+                    document.getElementById('modal-ticket-code').value = '';
+                    document.getElementById('modal-player-pwd').value = '';
+                    document.getElementById('modal-player-username').value = '';
+                    showToast("Session de jeu lancée !");
+                    syncNow();
+                } else {
+                    alert(res.message);
+                }
+            } catch (err) {
+                alert("Erreur de connexion.");
+            }
+        }
+
+        // 2. Auto-Écoles Recharge Modal
+        function openSchoolRechargeModal(schoolId, schoolName) {
+            document.getElementById('recharge-school-id').value = schoolId;
+            document.getElementById('recharge-school-name').textContent = schoolName;
+            document.getElementById('recharge-school-amount').value = 5000;
+            document.getElementById('school-recharge-modal').classList.remove('hidden');
+        }
+
+        function closeSchoolRechargeModal() {
+            document.getElementById('school-recharge-modal').classList.add('hidden');
+        }
+
+        async function submitSchoolRecharge() {
+            const sId = document.getElementById('recharge-school-id').value;
+            const amt = parseInt(document.getElementById('recharge-school-amount').value);
+            try {
+                const response = await fetch(`/api/schools/${sId}/recharge`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ amount: amt })
+                });
+                const res = await response.json();
+                if (res.success) {
+                    closeSchoolRechargeModal();
+                    showToast("Compte Auto-École crédité !");
+                    window.location.reload();
+                } else { alert(res.message); }
+            } catch (err) { alert("Erreur réseau"); }
+        }
+
+        async function createSchool(e) {
+            e.preventDefault();
+            const name = document.getElementById('school-name').value.trim();
+            const inst = document.getElementById('school-instructor').value.trim();
+            const rate = parseInt(document.getElementById('school-rate').value);
+            const bal = parseInt(document.getElementById('school-balance').value || 0);
+
+            try {
+                const response = await fetch('/api/schools/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ school_name: name, instructor_name: inst, special_hourly_rate: rate, balance: bal })
+                });
+                const res = await response.json();
+                if (res.success) {
+                    showToast("Compte Auto-École créé !");
+                    window.location.reload();
+                } else { alert(res.message); }
+            } catch(err) { alert("Erreur"); }
+        }
+
+        async function deleteSchool(id) {
+            if (!confirm("Supprimer définitivement ce compte Auto-École ?")) return;
+            try {
+                const response = await fetch(`/api/schools/${id}`, { method: 'DELETE' });
+                const res = await response.json();
+                if (res.success) { showToast("Compte supprimé."); window.location.reload(); }
+            } catch(e) { alert("Erreur"); }
+        }
+
+        // --- CASHIER DAILY EVALUATION MODAL MODULE ---
+        function openEvaluationModal(day, rating, punctuality, cash, notes, recruits) {
+            document.getElementById('eval-day-num').textContent = day;
+            document.getElementById('eval-day-number-input').value = day;
+            document.getElementById('eval-rating').value = rating || 5;
+            document.getElementById('eval-punctuality').value = punctuality || 'good';
+            document.getElementById('eval-cash').value = cash || 'exact';
+            document.getElementById('eval-notes').value = notes || '';
+            document.getElementById('eval-recruits-text').textContent = recruits;
+            document.getElementById('eval-bonus-count').textContent = recruits;
+            
+            // Calculate salary preview
+            const bonusAmount = recruits * 200;
+            document.getElementById('eval-bonus-amount').textContent = `${bonusAmount} CFA`;
+            document.getElementById('eval-net-amount').textContent = `${5000 + bonusAmount} CFA`;
+            
+            document.getElementById('evaluation-modal').classList.remove('hidden');
+        }
+
+        function closeEvaluationModal() {
+            document.getElementById('evaluation-modal').classList.add('hidden');
+        }
+
+        async function submitEvaluation(e) {
+            e.preventDefault();
+            const day = document.getElementById('eval-day-number-input').value;
+            const rating = document.getElementById('eval-rating').value;
+            const punctuality = document.getElementById('eval-punctuality').value;
+            const cash = document.getElementById('eval-cash').value;
+            const notes = document.getElementById('eval-notes').value.trim();
+
+            try {
+                const response = await fetch('/api/cashier/evaluate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ day_number: day, rating: rating, punctuality: punctuality, cash_accuracy: cash, notes: notes })
+                });
+                const res = await response.json();
+                if (res.success) {
+                    closeEvaluationModal();
+                    showToast("Évaluation enregistrée !");
+                    window.location.reload();
+                }
+            } catch(err) { alert("Erreur d'enregistrement"); }
+        }
+
+        // --- REFERRALS AFFILIATION API ---
+        async function claimReferral(id) {
+            try {
+                const response = await fetch(`/api/referrals/${id}/claim`, { method: 'POST' });
+                const res = await response.json();
+                if (res.success) {
+                    showToast("Parrainage validé et délivré !");
+                    window.location.reload();
+                }
+            } catch(e) { alert("Erreur"); }
+        }
+
+        // 3. Visualisation Écran à distance
+        function openRemoteView(termId, termName) {
+            document.getElementById('remote-modal-term-name').textContent = termName;
+            
+            const imgEl = document.getElementById('remote-screen-img');
+            const mockUserEl = document.getElementById('remote-mock-user');
+            const mockTimeEl = document.getElementById('remote-mock-time');
+            
+            const imagePresets = [
+                '/static/images/bg/game-1.jpg',
+                '/static/images/bg/game-2.jpg',
+                '/static/images/bg/game-3.jpg'
+            ];
+            
+            const randomPreset = imagePresets[termId % imagePresets.length];
+            imgEl.style.backgroundImage = `url('${randomPreset}')`;
+            
+            const cardUser = document.getElementById(`term-user-${termId}`);
+            const cardTime = document.getElementById(`term-time-${termId}`);
+            
+            mockUserEl.textContent = cardUser ? `Utilisateur : ${cardUser.textContent.trim()}` : 'Session Active';
+            mockTimeEl.textContent = cardTime ? `Restant : ${cardTime.textContent.trim()}` : '--:--:--';
+            
+            document.getElementById('remote-modal').classList.remove('hidden');
+        }
+
+        function closeRemoteView() {
+            document.getElementById('remote-modal').classList.add('hidden');
+        }
+
+        // --- SUBMIT COMPONENT ACTIONS ---
+
+        // Generate tickets
+        async function generateTickets(e) {
+            e.preventDefault();
+            const qty = parseInt(document.getElementById('ticket-qty').value);
+            const duration = parseInt(document.getElementById('ticket-duration').value);
+            const price = parseInt(document.getElementById('ticket-price').value);
+
+            const btn = document.getElementById('btn-gen-tck');
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Émission...`;
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(`/api/tickets/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ count: qty, duration: duration, price: price })
+                });
+                const res = await response.json();
+                if (res.success) {
+                    showToast(`Émission de ${qty} tickets effectuée.`);
+                    syncNow();
+                }
+            } catch (err) {
+                alert("Erreur de connexion");
+            } finally {
+                btn.innerHTML = `Émettre & Transmettre <i class="fa-solid fa-arrow-right"></i>`;
+                btn.disabled = false;
+            }
+        }
+
+        // Auto-fill price based on duration for ticket generation
+        function autoFillPrice() {
+            const duration = parseInt(document.getElementById('ticket-duration').value);
+            const baseRate = parseInt(document.getElementById('setting-hourly-rate').value || 500);
+            const autoPrice = Math.round((duration / 60) * baseRate);
+            document.getElementById('ticket-price').value = autoPrice;
+        }
+
+        // --- REAL-TIME GRAPHICAL & DATA SYNCHRONIZATION ---
+
+        function formatSeconds(sec) {
+            if (sec < 0) return "LIBRE (∞)";
+            const h = Math.floor(sec / 3600).toString().padStart(2, '0');
+            const m = Math.floor((sec % 3600) / 60).toString().padStart(2, '0');
+            const s = Math.floor(sec % 60).toString().padStart(2, '0');
+            return `${h}:${m}:${s}`;
+        }
+
+        async function syncNow() {
+            const spinner = document.getElementById('sync-spinner');
+            if (spinner) spinner.classList.add('fa-spin');
+
+            try {
+                await fetch('/api/tick', { method: 'POST' });
+
+                const statsResponse = await fetch('/api/dashboard/stats');
+                const stats = await statsResponse.json();
+
+                document.getElementById('stat-revenue').innerHTML = `${stats.today_revenue} <span class="text-xs text-emerald-400 font-bold">CFA</span>`;
+                document.getElementById('stat-tickets').textContent = stats.tickets_sold_today;
+                document.getElementById('stat-players').textContent = stats.active_players_count;
+                document.getElementById('stat-total').innerHTML = `${stats.all_time_revenue} <span class="text-xs text-cyan-400 font-bold">CFA</span>`;
+
+                document.getElementById('count-total').textContent = stats.online_count + stats.paused_count + stats.occupied_count;
+                document.getElementById('count-occupied').textContent = stats.occupied_count;
+                document.getElementById('count-free').textContent = stats.free_count;
+                document.getElementById('count-paused').textContent = stats.paused_count;
+
+                const termResponse = await fetch('/api/terminals');
+                const terminals = await termResponse.json();
+                
+                const gridContainer = document.getElementById('terminal-grid');
+                gridContainer.innerHTML = '';
+
+                terminals.forEach(term => {
+                    let cardClass = "bg-slate-950 border rounded-2xl p-4 transition-all duration-300 flex flex-col justify-between shadow-lg relative overflow-hidden group ";
+                    let topAccentClass = "absolute top-0 left-0 right-0 h-1 ";
+                    let badgeClass = "text-[8px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ";
+                    let statusLabel = term.status;
+
+                    if (term.status === 'occupied') {
+                        cardClass += "border-fuchsia-500/40 custom-glow-green";
+                        topAccentClass += "bg-fuchsia-500";
+                        badgeClass += "bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20";
+                        statusLabel = "EN JEU";
+                    } else if (term.status === 'paused') {
+                        cardClass += "border-amber-500/40 custom-glow-orange";
+                        topAccentClass += "bg-amber-500";
+                        badgeClass += "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+                        statusLabel = "PAUSE";
+                    } else if (term.status === 'free') {
+                        cardClass += "border-cyan-500/20 custom-glow-blue";
+                        topAccentClass += "bg-cyan-500";
+                        badgeClass += "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20";
+                        statusLabel = "LIBRE";
+                    } else {
+                        cardClass += "border-slate-800/80";
+                        topAccentClass += "bg-slate-700";
+                        badgeClass += "bg-slate-800 text-slate-500 border border-slate-700";
+                        statusLabel = "OFFLINE";
+                    }
+
+                    let userDetail = '';
+                    if (term.status === 'occupied' || term.status === 'paused') {
+                        let typeText = "Direct";
+                        if (term.session_type === 'player') typeText = "Joueur";
+                        else if (term.session_type === 'ticket') typeText = "Ticket";
+                        else if (term.session_type === 'driving_school') typeText = "Auto-École";
+
+                        let remainingSecs = 0;
+                        let timerDisplay = "--:--:--";
+                        
+                        if (term.session_type === 'postpaid') {
+                            timerDisplay = formatSeconds(term.time_spent_seconds);
+                        } else {
+                            const totalSecs = term.duration_mins * 60;
+                            remainingSecs = Math.max(0, totalSecs - term.time_spent_seconds);
+                            timerDisplay = formatSeconds(remainingSecs);
+                        }
+
+                        userDetail = `
+                        <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800/50 text-xs space-y-1.5 font-mono">
+                            <div class="flex justify-between text-slate-500">
+                                <span>Utilisateur :</span>
+                                <strong class="text-slate-200 font-bold max-w-[120px] truncate" id="term-user-${term.id}">${typeText}</strong>
+                            </div>
+                            <div class="flex justify-between text-slate-500 items-center">
+                                <span>Temps restant :</span>
+                                <span class="font-mono font-bold text-white text-sm ${remainingSecs < 300 && term.session_type !== 'postpaid' ? 'text-red-500 animate-pulse' : ''}" id="term-time-${term.id}">${timerDisplay}</span>
+                            </div>
+                        </div>`;
+                    } else {
+                        userDetail = `
+                        <div class="h-12 flex items-center justify-center text-slate-600 text-xs italic">
+                            Prêt pour une session de jeu
+                        </div>`;
+                    }
+
+                    let buttonsHTML = '';
+                    if (term.status === 'free') {
+                        buttonsHTML = `
+                        <button onclick="openStartModal(${term.id}, '${term.name}')" class="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-red-600/10">
+                            <i class="fa-solid fa-play"></i> Lancer Session
+                        </button>`;
+                    } else if (term.status === 'occupied') {
+                        buttonsHTML = `
+                        <button onclick="pauseSession(${term.id})" class="p-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/20 rounded-lg text-xs transition-colors flex-1 flex items-center justify-center gap-1" title="Pause">
+                            <i class="fa-solid fa-pause"></i> Pause
+                        </button>
+                        <button onclick="stopSession(${term.id})" class="p-2 bg-red-600/10 hover:bg-red-500 text-red-400 border border-red-500/20 rounded-lg text-xs font-bold transition-colors flex-1 flex items-center justify-center gap-1" title="Arrêter">
+                            <i class="fa-solid fa-stop"></i> Arrêter
+                        </button>`;
+                    } else if (term.status === 'paused') {
+                        buttonsHTML = `
+                        <button onclick="resumeSession(${term.id})" class="p-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg text-xs transition-colors flex-1 flex items-center justify-center gap-1" title="Reprendre">
+                            <i class="fa-solid fa-play"></i> Reprendre
+                        </button>
+                        <button onclick="stopSession(${term.id})" class="p-2 bg-red-600/10 hover:bg-red-500 text-red-400 border border-red-500/20 rounded-lg text-xs font-bold transition-colors flex-1 flex items-center justify-center gap-1" title="Arrêter">
+                            <i class="fa-solid fa-stop"></i> Arrêter
+                        </button>`;
+                    }
+
+                    let mirrorBtn = '';
+                    if (term.status === 'occupied' || term.status === 'paused') {
+                        mirrorBtn = `
+                        <button onclick="openRemoteView(${term.id}, '${term.name}')" class="p-2 bg-slate-900 hover:bg-slate-800 text-red-500 rounded-lg text-xs border border-slate-800 transition-colors" title="Visualiser Écran">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>`;
+                    }
+
+                    const pcIcon = term.type === 'PC' ? '<i class="fa-solid fa-desktop text-[9px]"></i>' : '<i class="fa-solid fa-gamepad text-[9px]"></i>';
+                    const termCardHTML = `
+                    <div id="term-card-${term.id}" class="${cardClass}">
+                        <div class="${topAccentClass}"></div>
+                        <div class="flex justify-between items-start mb-3 mt-1">
+                            <div>
+                                <span class="text-[10px] text-slate-500 block uppercase font-bold tracking-wider">${pcIcon} ${term.type}</span>
+                                <h3 class="text-lg font-black text-white leading-tight">${term.name}</h3>
+                            </div>
+                            <span id="term-badge-${term.id}" class="${badgeClass}">${statusLabel}</span>
+                        </div>
+                        <div class="my-3 space-y-2">
+                            ${userDetail}
+                        </div>
+                        <div class="pt-2 border-t border-slate-800/50 flex gap-2 justify-between">
+                            ${buttonsHTML}
+                            ${mirrorBtn}
+                        </div>
+                    </div>`;
+
+                    gridContainer.insertAdjacentHTML('beforeend', termCardHTML);
+                });
+
+                // 3. Rebuild Recent Transactions Table
+                const txBody = document.getElementById('transactions-list-body');
+                txBody.innerHTML = '';
+                if (stats.recent_transactions && stats.recent_transactions.length > 0) {
+                    stats.recent_transactions.forEach(tx => {
+                        let txTypeBadge = '';
+                        if (tx.type === 'ticket_sale') {
+                            txTypeBadge = '<span class="px-2 py-0.5 rounded text-[8px] font-bold uppercase bg-red-500/15 text-red-500 border border-red-500/20">Vente Ticket</span>';
+                        } else if (tx.type === 'player_recharge') {
+                            txTypeBadge = '<span class="px-2 py-0.5 rounded text-[8px] font-bold uppercase bg-purple-500/15 text-purple-400 border border-purple-500/20">Recharge Joueur</span>';
+                        } else {
+                            txTypeBadge = '<span class="px-2 py-0.5 rounded text-[8px] font-bold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">Fin Session</span>';
+                        }
+
+                        const dateFormatted = tx.created_at.replace('T', ' ').substring(0, 16);
+                        const rowHTML = `
+                        <tr class="hover:bg-slate-900/50 font-mono">
+                            <td class="p-3 font-semibold text-slate-500">#${tx.id}</td>
+                            <td class="p-3">${txTypeBadge}</td>
+                            <td class="p-3 font-medium text-slate-300 font-sans">${tx.description}</td>
+                            <td class="p-3 text-slate-400">${dateFormatted}</td>
+                            <td class="p-3 text-right font-black text-emerald-400">+${tx.amount} CFA</td>
+                        </tr>`;
+                        txBody.insertAdjacentHTML('beforeend', rowHTML);
+                    });
+                } else {
+                    txBody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-500 italic">Aucune transaction aujourd\'hui</td></tr>';
+                }
+
+                // 4. Update the Active Tickets Table
+                const ticketsRes = await fetch('/api/tickets');
+                const ticketsList = await ticketsRes.json();
+                const ticketsBody = document.getElementById('tickets-list-body');
+                ticketsBody.innerHTML = '';
+                
+                const activeTicks = ticketsList.filter(t => t.status === 'active').slice(0, 10);
+                if (activeTicks.length > 0) {
+                    activeTicks.forEach(ticket => {
+                        const rowHTML = `
+                        <tr class="hover:bg-slate-900/50">
+                            <td class="p-2 text-center font-mono font-bold text-fuchsia-400">${ticket.code}</td>
+                            <td class="p-2 font-medium font-mono">${ticket.duration_mins} min</td>
+                            <td class="p-2 font-semibold text-slate-300 font-mono">${ticket.price} CFA</td>
+                            <td class="p-2 text-center font-mono">
+                                <span class="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                                    Actif
+                                </span>
+                            </td>
+                        </tr>`;
+                        ticketsBody.insertAdjacentHTML('beforeend', rowHTML);
+                    });
+                } else {
+                    ticketsBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-500 italic font-mono">Aucun ticket actif</td></tr>';
+                }
+
+            } catch (err) {
+                console.error("Erreur d'actualisation", err);
+            } finally {
+                if (spinner) spinner.classList.remove('fa-spin');
+            }
+        }
+
+        setInterval(syncNow, 2500);
+
+    </script>
+</body>
+</html>

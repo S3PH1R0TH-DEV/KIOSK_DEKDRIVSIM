@@ -5,7 +5,7 @@ Ce fichier regroupe l'intégralité du code de l'application (Moteur Web + Modè
 Il gère de manière autonome l'initialisation de la base de données, la sécurité, l'audit et l'administration.
 """
 
-from flask import Flask, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
@@ -1163,21 +1163,97 @@ def get_report_data(period):
     }
 
 
-# --- COUCHE DU SERVEUR WEB FLASK (API-ONLY : React/Electron/Capacitor) ---
-# Les routes Jinja legacy (/, /admin, /client/<name>, /admin/*/print) ont ete
-# supprimees : le frontend est React (dek-drivsim-pc). Le backend ne sert plus
-# que du JSON (/api/*). Cela evite le 500 "template not found" apres le clean
-# 9c0cc81 (templates/static supprimes). Voir audit Jellow.
+# --- COUCHE DU SERVEUR WEB FLASK (APK SERVEUR : Jinja + API) ---
+# Base APK serveur Jellow : Flask sert les templates Jinja (admin/cashier/client)
+# + les API JSON pour le PC client (dek_client_agent.py). Ne pas supprimer.
 
 @app.route('/')
 def index():
-    # API-only : redirige vers le frontend React (hash router) ou renvoie un JSON d'info
-    # Pour Electron/Capacitor, le frontend est en file:// ou http://localhost:5173
-    return jsonify({'name': 'DEK-DRIVSIM API', 'version': '2.1', 'docs': '/api/health', 'frontend': 'dek-drivsim-pc'})
+    client_ip = request.remote_addr
+    role = get_device_role(client_ip)
+    if not role:
+        return redirect(url_for('role_setup'))
+    if role == 'admin':
+        return redirect(url_for('admin_dashboard'))
+    elif role == 'cashier':
+        return redirect(url_for('cashier_dashboard'))
+    return redirect(url_for('role_setup'))
 
 @app.route('/role-setup')
 def role_setup():
-    return jsonify({'message': 'Utiliser POST /api/setup-role avec {ip, password}'}), 200
+    client_ip = request.remote_addr
+    role = get_device_role(client_ip)
+    if role:
+        return redirect(url_for('index'))
+    return render_template('role_setup.html', client_ip=client_ip)
+
+@app.route('/admin')
+def admin_dashboard():
+    client_ip = request.remote_addr
+    role = get_device_role(client_ip)
+    if role != 'admin':
+        return redirect(url_for('index'))
+    terminals = get_all_terminals()
+    tickets = get_tickets()
+    players = get_players()
+    summary = get_financial_summary()
+    settings = get_settings()
+    schools = get_driving_schools()
+    referrals = get_all_referrals()
+    evaluations = get_cashier_evaluations()
+    connection_logs = get_all_connection_logs()
+    incomplete_days_count = sum(1 for ev in evaluations if ev['evaluated_at'] == '')
+    return render_template('admin_dashboard.html', terminals=terminals, tickets=tickets, players=players, summary=summary, settings=settings, schools=schools, referrals=referrals, evaluations=evaluations, connection_logs=connection_logs, incomplete_days_count=incomplete_days_count)
+
+@app.route('/cashier')
+def cashier_dashboard():
+    client_ip = request.remote_addr
+    role = get_device_role(client_ip)
+    if not role:
+        return redirect(url_for('index'))
+    if role == 'client':
+        return redirect(url_for('index'))
+    terminals = get_all_terminals()
+    tickets = get_tickets()
+    players = get_players()
+    summary = get_financial_summary()
+    settings = get_settings()
+    evaluations = get_cashier_evaluations()
+    active_eval_day = None
+    for ev in evaluations:
+        if ev['evaluated_at'] == '':
+            active_eval_day = ev
+            break
+    return render_template('cashier_dashboard.html', terminals=terminals, tickets=tickets, players=players, summary=summary, settings=settings, active_eval_day=active_eval_day)
+
+@app.route('/client/<name>')
+def client_locker(name):
+    terminal = get_terminal_by_name(name)
+    if not terminal:
+        conn = get_db()
+        cursor = conn.cursor()
+        term_type = 'Console' if any(x in name.upper() for x in ['CONSOLE', 'PS', 'XBOX', 'NINTENDO']) else 'PC'
+        cursor.execute("INSERT OR IGNORE INTO terminals (name, type) VALUES (?, ?)", (name, term_type))
+        conn.commit()
+        conn.close()
+        terminal = get_terminal_by_name(name)
+    settings = get_settings()
+    games = get_all_games()
+    return render_template('client_locker.html', name=name, terminal=terminal, settings=settings, games=games)
+
+@app.route('/admin/tickets/print')
+def print_tickets_page():
+    status = request.args.get('status', 'active')
+    tickets = get_tickets(status=status)
+    settings = get_settings()
+    return render_template('tickets_print.html', tickets=tickets, settings=settings)
+
+@app.route('/admin/reports/print')
+def print_reports_page():
+    period = request.args.get('period', 'daily')
+    report = get_report_data(period)
+    settings = get_settings()
+    return render_template('reports_print.html', report=report, settings=settings)
 
 _setup_role_attempts = {}
 @app.route('/api/setup-role', methods=['POST'])

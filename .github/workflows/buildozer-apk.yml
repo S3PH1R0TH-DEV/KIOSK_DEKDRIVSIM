@@ -1,0 +1,67 @@
+name: Build APK Buildozer (legacy APK serveur) - manual only
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Buildozer
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            .buildozer
+          key: ${{ runner.os }}-buildozer-v1-${{ hashFiles('buildozer.spec') }}
+          restore-keys: |
+            ${{ runner.os }}-buildozer-v1-
+
+      - name: Decode Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "Error: KEYSTORE_BASE64 is empty"
+            exit 1
+          fi
+          # Nettoyage et d├®codage
+          printf "%s" "$KEYSTORE_BASE64" | tr -d '\n\r ' | base64 -d > release.keystore
+          # Diagnostic
+          echo "=== Keystore Info ==="
+          ls -l release.keystore
+          file release.keystore
+
+      - name: Build with Buildozer
+        uses: ArtemisG/buildozer-action@v1
+        id: buildozer
+        with:
+          command: buildozer android release
+          repository_root: .
+        env:
+          P4A_RELEASE_KEYSTORE: release.keystore
+          P4A_RELEASE_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
+          P4A_RELEASE_KEYALIAS_PASS: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: dek-drivsim-release
+          path: bin/*.apk
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Build (Buildozer)
+          body: |
+            **Build automatique DEK-DRIVSIM** ÔÇö ${{ github.sha }}
+            APK Release sign├® via Buildozer.
+          files: bin/*.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

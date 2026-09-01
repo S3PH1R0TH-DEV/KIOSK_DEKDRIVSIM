@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activation Console - DEK-DRIVSIM</title>
+    <!-- Tailwind CSS -->
+    <script src="/static/vendor/tailwind.min.js"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css">
+    <style>
+        body {
+            background: radial-gradient(circle at center, #120e2e 0%, #04050a 100%);
+            min-height: 100vh;
+        }
+        .animated-grid {
+            background-size: 50px 50px;
+            background-image: linear-gradient(to right, rgba(217, 70, 239, 0.03) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(217, 70, 239, 0.03) 1px, transparent 1px);
+        }
+        .neon-glow-purple {
+            text-shadow: 0 0 10px #d946ef, 0 0 20px rgba(217, 70, 239, 0.5);
+        }
+        .neon-border-purple {
+            border: 1px solid #d946ef;
+            box-shadow: 0 0 15px rgba(217, 70, 239, 0.25), inset 0 0 15px rgba(217, 70, 239, 0.1);
+        }
+    </style>
+</head>
+<body class="text-slate-100 flex items-center justify-center p-4 animated-grid font-sans">
+    
+    <div class="max-w-md w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-8 shadow-2xl backdrop-blur-lg flex flex-col items-center text-center neon-border-purple">
+        <!-- Logo -->
+        <div class="relative mb-6">
+            <div class="absolute -inset-1 rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 opacity-75 blur-sm animate-pulse"></div>
+            <img src="/static/images/logo.png" alt="DEK-DRIVSIM" class="relative w-28 h-28 rounded-full border border-slate-800 object-cover shadow-2xl">
+        </div>
+
+        <h1 class="text-2xl font-black tracking-widest text-white uppercase neon-glow-purple">DEK-DRIVSIM</h1>
+        <p class="text-xs text-cyan-400 font-extrabold uppercase tracking-widest mt-1">Activation du Terminal</p>
+        
+        <p class="text-xs text-slate-400 leading-relaxed my-6">
+            Saisissez le code d'accès de sécurité de l'établissement pour activer et configurer cet appareil de manière permanente.
+        </p>
+
+        <!-- Message Display -->
+        <div id="auth-alert" class="hidden w-full mb-4 p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-500">
+            <i class="fa-solid fa-circle-exclamation text-base"></i>
+            <span id="auth-alert-msg">Code incorrect</span>
+        </div>
+
+        <!-- Role Activation Form -->
+        <form onsubmit="submitRoleActivation(event)" class="w-full space-y-4 font-mono text-xs">
+            <div class="relative">
+                <input type="password" id="role-password" placeholder="Saisir le code d'accès sécurisé" required autocomplete="off"
+                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3.5 text-center text-sm text-white focus:outline-none focus:border-fuchsia-500 font-bold placeholder-slate-700 transition-all">
+                <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-600">
+                    <i class="fa-solid fa-key"></i>
+                </span>
+            </div>
+
+            <button type="submit" id="btn-submit" class="w-full py-3.5 bg-gradient-to-r from-fuchsia-600 to-fuchsia-500 hover:from-fuchsia-500 hover:to-fuchsia-400 text-white font-bold rounded-xl tracking-widest uppercase shadow-lg shadow-fuchsia-600/20 hover:shadow-fuchsia-500/30 transition-all duration-300 flex items-center justify-center gap-2 text-xs border border-fuchsia-500/25">
+                Activer l'appareil <i class="fa-solid fa-bolt"></i>
+            </button>
+        </form>
+
+        <div class="mt-8 border-t border-slate-800/80 pt-4 w-full text-[10px] text-slate-500 uppercase tracking-widest font-mono">
+            IP Appareil : {{ client_ip }}
+        </div>
+    </div>
+
+    <script>
+        async function submitRoleActivation(e) {
+            e.preventDefault();
+            const password = document.getElementById('role-password').value;
+            const btn = document.getElementById('btn-submit');
+            const alertBox = document.getElementById('auth-alert');
+            const alertMsg = document.getElementById('auth-alert-msg');
+            
+            alertBox.classList.add('hidden');
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Activation...`;
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/setup-role', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: password })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert(`Félicitations ! Cet appareil a été activé en tant que : ${result.role === 'admin' ? 'PROPRIÉTAIRE (ADMIN)' : 'CAISSIER GÉRANT'}.`);
+                    window.location.href = result.redirect;
+                } else {
+                    alertMsg.textContent = result.message;
+                    alertBox.classList.remove('hidden');
+                }
+            } catch (err) {
+                alertMsg.textContent = "Erreur de connexion avec le serveur.";
+                alertBox.classList.remove('hidden');
+            } finally {
+                btn.innerHTML = `Activer l'appareil <i class="fa-solid fa-bolt"></i>`;
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

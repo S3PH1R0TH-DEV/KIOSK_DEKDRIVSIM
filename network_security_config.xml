@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Autorise le trafic HTTP non chiffré.
+  Indispensable : le serveur Flask embarqué écoute en clair sur 127.0.0.1,
+  et les postes clients du cybercafé dialoguent avec lui en HTTP sur le LAN.
+  Copié dans res/xml/ par la clé `android.res_xml` de buildozer.spec, puis
+  référencé via android:networkSecurityConfig dans manifest_application_args.xml.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">localhost</domain>
+    </domain-config>
+</network-security-config>

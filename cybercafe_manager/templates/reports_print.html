@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rapport d'Activité {{ report.period_label }} - {{ settings.cyber_name }}</title>
+    <!-- Tailwind CSS -->
+    <script src="/static/vendor/tailwind.min.js"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css">
+    <style>
+        @media print {
+            body {
+                background-color: #fff;
+                color: #000;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-border {
+                border: 1px solid #cbd5e1 !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 p-6 min-h-screen flex flex-col justify-between">
+
+    <!-- Action / Print Bar -->
+    <div class="no-print max-w-4xl mx-auto mb-6 w-full bg-white p-4 rounded-2xl shadow border border-slate-200 flex justify-between items-center">
+        <div>
+            <h1 class="text-lg font-bold flex items-center gap-2 text-slate-900">
+                <i class="fa-solid fa-file-invoice-dollar text-red-600"></i> Impression Rapport Financier
+            </h1>
+            <p class="text-xs text-slate-500">Période sélectionnée : <span class="font-semibold text-red-600">{{ report.period_label }}</span></p>
+        </div>
+        <div class="flex gap-2">
+            <a href="/admin" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700 font-bold text-xs transition-all">
+                <i class="fa-solid fa-arrow-left"></i> Retour Admin
+            </a>
+            <button onclick="window.print()" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-red-600/20 transition-all">
+                <i class="fa-solid fa-print"></i> Imprimer Rapport
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN REPORT PAGE (Paper styled) -->
+    <div class="max-w-4xl w-full mx-auto bg-white p-8 rounded-3xl shadow-sm border border-slate-200 flex-1 flex flex-col justify-between print-border">
+        
+        <!-- Header Section -->
+        <div>
+            <div class="flex justify-between items-start border-b border-slate-200 pb-6 mb-6">
+                <div>
+                    <h2 class="text-2xl font-black text-red-600 tracking-tight uppercase">{{ settings.cyber_name }}</h2>
+                    <p class="text-xs text-slate-500 font-medium">Zone de Simulation de Conduite Automobile & Gaming</p>
+                    <p class="text-xs text-slate-400 mt-1">SSID WiFi : <span class="font-semibold font-mono">{{ settings.wifi_ssid }}</span></p>
+                </div>
+                <div class="text-right">
+                    <span class="px-3 py-1 bg-red-50 text-red-600 font-extrabold text-xs rounded-full uppercase tracking-wider">
+                        RAPPORT FINANCIER
+                    </span>
+                    <p class="text-xs text-slate-500 font-mono mt-2">Émis le : {{ report.end_date | replace('T', ' ') | truncate(16, True, '') }}</p>
+                </div>
+            </div>
+
+            <!-- Report Details -->
+            <div class="mb-6">
+                <h3 class="text-lg font-black text-slate-800 mb-2 uppercase tracking-wide">Rapport {{ report.period_label }}</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs">
+                    <div>
+                        <span class="text-slate-400 block font-bold uppercase tracking-wider text-[10px]">Date de Début :</span>
+                        <strong class="text-slate-700 font-mono">{{ report.start_date | replace('T', ' ') | truncate(16, True, '') }}</strong>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block font-bold uppercase tracking-wider text-[10px]">Date de Fin :</span>
+                        <strong class="text-slate-700 font-mono">{{ report.end_date | replace('T', ' ') | truncate(16, True, '') }}</strong>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block font-bold uppercase tracking-wider text-[10px]">Sessions de Jeu :</span>
+                        <strong class="text-slate-700 font-mono">{{ report.total_sessions }} sessions lancées</strong>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block font-bold uppercase tracking-wider text-[10px]">Total Encaissements :</span>
+                        <strong class="text-emerald-600 font-black font-mono text-sm">+{{ report.total_revenue }} CFA</strong>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Breakdown table of revenues -->
+            <div class="mb-8">
+                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Répartition des Encaissements</h4>
+                <div class="border border-slate-200 rounded-xl overflow-hidden">
+                    <table class="w-full text-xs text-left">
+                        <thead class="bg-slate-50 text-slate-500 uppercase text-[9px] tracking-wider border-b border-slate-200">
+                            <tr>
+                                <th class="p-3">Type d'Activité / Source de Revenu</th>
+                                <th class="p-3 text-center">Nombre d'opérations</th>
+                                <th class="p-3 text-right">Montant Collecté</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200">
+                            <tr>
+                                <td class="p-3 font-semibold text-slate-800 flex items-center gap-2">
+                                    <span class="w-2.5 h-2.5 rounded bg-red-500"></span> Ventes de Tickets d'Accès Prépayés
+                                </td>
+                                <td class="p-3 text-center font-mono font-medium text-slate-600">{{ report.breakdown.ticket_sale.count }}</td>
+                                <td class="p-3 text-right font-bold text-slate-900 font-mono">+{{ report.breakdown.ticket_sale.amount }} CFA</td>
+                            </tr>
+                            <tr>
+                                <td class="p-3 font-semibold text-slate-800 flex items-center gap-2">
+                                    <span class="w-2.5 h-2.5 rounded bg-purple-500"></span> Recharges de Portefeuille Membres
+                                </td>
+                                <td class="p-3 text-center font-mono font-medium text-slate-600">{{ report.breakdown.player_recharge.count }}</td>
+                                <td class="p-3 text-right font-bold text-slate-900 font-mono">+{{ report.breakdown.player_recharge.amount }} CFA</td>
+                            </tr>
+                            <tr>
+                                <td class="p-3 font-semibold text-slate-800 flex items-center gap-2">
+                                    <span class="w-2.5 h-2.5 rounded bg-emerald-500"></span> Sessions Libres (Post-payées)
+                                </td>
+                                <td class="p-3 text-center font-mono font-medium text-slate-600">{{ report.breakdown.session_payment.count }}</td>
+                                <td class="p-3 text-right font-bold text-slate-900 font-mono">+{{ report.breakdown.session_payment.amount }} CFA</td>
+                            </tr>
+                            <tr class="bg-slate-50 font-bold border-t border-slate-300">
+                                <td class="p-3 text-slate-900 uppercase font-black text-[10px]">TOTAL DE LA CAISSE</td>
+                                <td class="p-3 text-center font-mono font-black text-slate-800">
+                                    {{ report.breakdown.ticket_sale.count + report.breakdown.player_recharge.count + report.breakdown.session_payment.count }}
+                                </td>
+                                <td class="p-3 text-right font-black text-emerald-600 font-mono text-sm">+{{ report.total_revenue }} CFA</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Popular machines ranking -->
+            {% if report.popular_terminals %}
+            <div class="mb-8">
+                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Postes / Simulateurs les Plus Sollicités</h4>
+                <div class="space-y-2">
+                    {% for term in report.popular_terminals %}
+                    {% set max_count = report.popular_terminals[0].count %}
+                    {% set percentage = (term.count / max_count) * 100 %}
+                    <div class="text-xs">
+                        <div class="flex justify-between font-semibold text-slate-700 mb-1">
+                            <span>{{ term.name }} ({{ term.count }} sessions)</span>
+                            <span class="font-mono text-slate-400">{{ (term.total_seconds / 3600) | round(1) }} Heures de jeu</span>
+                        </div>
+                        <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                            <div class="h-full bg-red-600 rounded-full" style="width: {{ percentage }}%;"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Transaction Ledger -->
+            <div>
+                <h4 class="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Journal des Mouvements Financiers</h4>
+                <div class="border border-slate-200 rounded-xl overflow-hidden max-h-[30vh] overflow-y-auto">
+                    <table class="w-full text-[11px] text-left">
+                        <thead class="bg-slate-50 text-slate-500 uppercase text-[8px] tracking-wider border-b border-slate-200 sticky top-0">
+                            <tr>
+                                <th class="p-2.5">Numéro</th>
+                                <th class="p-2.5">Type</th>
+                                <th class="p-2.5">Description de la transaction</th>
+                                <th class="p-2.5">Date et Heure</th>
+                                <th class="p-2.5 text-right">Montant</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for tx in report.transactions %}
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-2.5 font-mono font-semibold text-slate-400">#{{ tx.id }}</td>
+                                <td class="p-2.5">
+                                    <span class="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase
+                                        {% if tx.type == 'ticket_sale' %} bg-red-50 text-red-600 border border-red-100
+                                        {% elif tx.type == 'player_recharge' %} bg-purple-50 text-purple-600 border border-purple-100
+                                        {% else %} bg-emerald-50 text-emerald-600 border border-emerald-100 {% endif %}">
+                                        {% if tx.type == 'ticket_sale' %}Ticket{% elif tx.type == 'player_recharge' %}Recharge{% else %}Session{% endif %}
+                                    </span>
+                                </td>
+                                <td class="p-2.5 text-slate-700 font-medium">{{ tx.description }}</td>
+                                <td class="p-2.5 font-mono text-slate-500">{{ tx.created_at | replace('T', ' ') | truncate(16, True, '') }}</td>
+                                <td class="p-2.5 text-right font-bold text-slate-900 font-mono">+{{ tx.amount }} CFA</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="p-6 text-center text-slate-400 italic">Aucune transaction enregistrée sur cette période.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Signature Section -->
+        <div class="mt-12 pt-8 border-t border-dashed border-slate-300 grid grid-cols-2 gap-12 text-center text-xs">
+            <div>
+                <p class="text-slate-400 uppercase font-black text-[9px] tracking-wider mb-12">Signature du Caissier Gérant</p>
+                <div class="w-3/4 mx-auto border-t border-slate-300"></div>
+            </div>
+            <div>
+                <p class="text-slate-400 uppercase font-black text-[9px] tracking-wider mb-12">Signature de l'Admin Propriétaire</p>
+                <div class="w-3/4 mx-auto border-t border-slate-300"></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

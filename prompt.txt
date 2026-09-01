@@ -1,0 +1,1 @@
+Fais un audit complet de ce qui se trouve dans ce dossier et dis moi si l'on peut faire mieux et qu'est-ce qu'on peut ajouter pour parfaire le tout. https://github.com/S3PH1R0TH-DEV/KIOSK_DEKDRIVSIM.git c'est le repo sur lequel on va pousser le projet dès que tout sera au point. C'est un build réussi mais

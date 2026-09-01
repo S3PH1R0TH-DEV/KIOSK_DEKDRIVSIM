@@ -1,31 +1,34 @@
-# KIOSK_DEKDRIVSIM — PC Kiosk + Android Capacitor
+# KIOSK_DEKDRIVSIM — Base APK Serveur (Jellow) + PC Client
 
-Cybercafé **DEK-DRIVSIM** : application Kiosk Windows (`.exe` Electron) + application Android Capacitor pour **Propriétaire** et **Caissier**. Le PC fait office de **serveur Flask** (`:5000`) et de **client Kiosk** ; l'APK se connecte au PC via le réseau local.
+Cybercafé **DEK-DRIVSIM** — **modèle de base restauré** : **l'APK Android est le serveur Flask** (`0.0.0.0:5000` + WebView `127.0.0.1:5000` via `main.py`), les **PC sont de simples clients kiosk** (`dek_client_agent.py` + `dek-drivsim-pc/`).
 
 ```
-PC Kiosk (Electron + React + Flask :5000)  <--- Wi-Fi --->  APK Android (Capacitor)
-         |  dekdrivsim.exe (NSIS x64)                 |  dekdrivsim.apk (signed dekdrivsim)
-         +---> API Flask + SQLite (cybercafe.db) <----+
+APK Serveur (Kivy + Flask :5000)  <--- Wi-Fi --->  PC Client (kiosk)
+ | main.py + WebView 127.0.0.1 + 0.0.0.0 LAN |  | dek_client_agent.py --server 192.168.x.x --pc PC-01 |
+ | cybercafe_manager/app.py + templates Jinja |  | ou dek-drivsim-pc (Electron) en mode client |
 ```
 
 ## Structure
 
 ```
 .
-├── cybercafe_manager/app.py          # Backend Flask + SQLite (API /api/*) — API-only, pas de Jinja
-├── dek-drivsim-pc/                   # Frontend React + Electron + Capacitor
-│   ├── src/                          # 3 rôles: Admin / Cashier / Player
-│   ├── electron-main.cjs / preload.cjs
-│   ├── capacitor.config.json
-│   └── android/                      # Projet Android (généré, build via Gradle)
+├── main.py                           # Entree Kivy APK — Flask + WebView (APK serveur)
+├── buildozer.spec                    # Build APK Buildozer (arm64-v8a, api 34)
+├── cybercafe_manager/app.py          # Backend Flask + SQLite + Jinja (APK serveur)
+│   ├── templates/ (admin/cashier/client) + static/vendor/ (hors-ligne)
+│   └── static/images/ (logo, presplash, bg)
+├── dek_client_agent.py               # Agent PC kiosk Windows (3 verrous) — config + auto-scan LAN
+├── dek-drivsim-pc/                   # Alternative PC kiosk Electron (peut pointer vers APK serveur via DEK_API_BASE)
+├── p4a-recipes/                      # Recettes markupsafe/flask pour Buildozer
 ├── .github/workflows/
-│   ├── build-pc.yml                  # Build Windows dekdrivsim.exe
-│   └── build-capacitor-apk.yml       # Build Android dekdrivsim.apk (signé dekdrivsim)
-├── docs/GITHUB_SECRETS.md            # Guide keystore + secrets
-└── scripts/encode-keystore.*         # Helper base64 keystore
+│   ├── buildozer-apk.yml             # Build APK serveur (manual, Buildozer)
+│   ├── build-pc.yml                  # Build PC Electron (windows)
+│   └── build-capacitor-apk.yml       # Build APK Capacitor (alternative, manual)
+├── docs/GITHUB_SECRETS.md
+└── scripts/encode-keystore.*
 ```
 
-Seuls ces fichiers sont nécessaires aux deux builds. Legacy Buildozer/Kivy supprimé (voir branche `archive/legacy-jellow` si besoin).
+Base Jellow (Buildozer) restaurée sur `main` — branche `archive/pc-serveur-04ac527` conserve l'ancien modèle PC-serveur.
 
 ## Builds GitHub (CI)
 
@@ -58,37 +61,41 @@ keytool -genkeypair -alias dekdrivsim -keyalg RSA -keysize 2048 -validity 10000 
   -dname "CN=DEK-DRIVSIM, OU=CyberCafe, O=DEK-DRIVSIM, L=Dakar, ST=Dakar, C=SN"
 ```
 
+## Com' APK (serveur) ↔ PC (client) — FIX 127.0.0.1
+
+**APK serveur** : `main.py:39` `FLASK_BIND_HOST=0.0.0.0:5000` (LAN) + `FLASK_HOST=127.0.0.1:5000` (WebView). `cybercafe_manager/app.py:1649` `app.run(host='0.0.0.0')`.
+
+**PC client** : `dek_client_agent.py:32` **ne hardcode plus `127.0.0.1`** :
+```bash
+# config manuelle
+python dek_client_agent.py --server 192.168.1.100 --pc PC-03
+# ou fichier dek_config.json {"server_ip":"192.168.1.100","pc_name":"PC-03"}
+# ou auto-scan 192.168.x.0/24 sur /api/health si aucune IP fournie
+python dek_client_agent.py  # scan automatique
+```
+`dek-drivsim-pc/` en mode client : `VITE_API_BASE=http://192.168.1.100:5000` ou `localStorage DEK_API_BASE` (LoginPage).
+
 ## Développement local
 
-### PC Kiosk (Electron)
+### APK serveur (Buildozer)
 ```bash
-cd dek-drivsim-pc
-npm ci
-npm run build
-npm run build:electron:win  # -> dist-electron/dekdrivsim.exe
-npm run dev:electron        # dev hot-reload
+# Docker (recommande, évite SDK/NDK)
+docker run --rm -v "$(pwd):/home/user/hostcwd" -v dekdrivsim_buildozer:/home/user/.buildozer kivy/buildozer:latest -v android debug
+# ou release signe (secrets)
+docker run ... buildozer android release
+# ou manuel
+buildozer android debug deploy run
+# → bin/*.apk
 ```
 
-`electron-main.cjs` lance Flask (`cybercafe_manager/app.py` via `extraResources`) et attend `http://127.0.0.1:5000/api/health`.
-
-### APK Capacitor
+### PC kiosk (dek_client_agent)
 ```bash
+python dek_client_agent.py --server 192.168.1.100 --pc PC-01   # kiosk inviolable + heartbeat
+pyinstaller --onefile --noconsole dek_client_agent.py         # → dist/dek_client_agent.exe
+# Alternative Electron
 cd dek-drivsim-pc
-npm ci
-npm run build
-npx cap sync android
-cd android && ./gradlew assembleRelease
+VITE_API_BASE=http://192.168.1.100:5000 npm run dev:electron
 ```
-
-## Rôles & Com' PC ↔ APK
-
-| Rôle | Route React | API |
-|---|---|---|
-| **Admin** | `/admin` | `/api/dashboard/stats`, `/api/terminals`, etc. |
-| **Caissier** | `/cashier` | vente tickets, recharges |
-| **Joueur** | `/player` | catalogue jeux |
-
-**PC cherche 127.0.0.1:5000 corrigé :** l'APK ne hardcode plus `127.0.0.1`. `src/api.ts` lit `localStorage DEK_API_BASE` (IP saisie sur l'écran Login si `Capacitor.isNative`). Le PC Electron expose `/api/health` et `getLocalIP` via `preload.cjs`.
 
 **Codes :**
 - Propriétaire device : **16c aléatoire** généré au 1er lancement, dans `admin_password.txt` (jamais `admin123`)
