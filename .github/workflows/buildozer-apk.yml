@@ -61,11 +61,6 @@ jobs:
           P4A_RELEASE_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
           P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
           P4A_RELEASE_KEYALIAS_PASS: ${{ secrets.KEY_PASSWORD }}
-        env:
-          P4A_RELEASE_KEYSTORE: release.keystore
-          P4A_RELEASE_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
-          P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
-          P4A_RELEASE_KEYALIAS_PASS: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
