@@ -5,8 +5,25 @@ const http = require('http')
 const os = require('os')
 
 const MASTERCODE = process.env.DEK_MASTERCODE || 'DEK-EXIT-2026'
-// Kiosk par défaut en prod (installé), fenêtré en dev. Forcer via DEK_KIOSK=0/1
 const KIOSK_MODE = process.env.DEK_KIOSK ? process.env.DEK_KIOSK === '1' : app.isPackaged
+let isQuittingViaMastercode = false
+
+function hideTaskbar() {
+  if (process.platform !== 'win32') return
+  try {
+    const cmd = `powershell -NoProfile -Command "Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")] public static extern IntPtr FindWindow(string c,string w); [DllImport(\\"user32.dll\\")] public static extern bool ShowWindow(IntPtr h,int c);' -Name W32 -Namespace N; $h=[N.W32]::FindWindow('Shell_TrayWnd',$null); if($h -ne 0){[N.W32]::ShowWindow($h,0)|Out-Null}; $h2=[N.W32]::FindWindow('Shell_SecondaryTrayWnd',$null); if($h2 -ne 0){[N.W32]::ShowWindow($h2,0)|Out-Null}"`
+    require('child_process').exec(cmd, { windowsHide: true }, () => {})
+    console.log('[KIOSK] Taskbar masquee')
+  } catch (e) { console.warn('[KIOSK] hideTaskbar fail', e.message) }
+}
+function showTaskbar() {
+  if (process.platform !== 'win32') return
+  try {
+    const cmd = `powershell -NoProfile -Command "Add-Type -MemberDefinition '[DllImport(\\"user32.dll\\")] public static extern IntPtr FindWindow(string c,string w); [DllImport(\\"user32.dll\\")] public static extern bool ShowWindow(IntPtr h,int c);' -Name W32 -Namespace N; $h=[N.W32]::FindWindow('Shell_TrayWnd',$null); if($h -ne 0){[N.W32]::ShowWindow($h,1)|Out-Null}; $h2=[N.W32]::FindWindow('Shell_SecondaryTrayWnd',$null); if($h2 -ne 0){[N.W32]::ShowWindow($h2,1)|Out-Null}"`
+    require('child_process').exec(cmd, { windowsHide: true }, () => {})
+    console.log('[KIOSK] Taskbar restauree')
+  } catch (e) { console.warn('[KIOSK] showTaskbar fail', e.message) }
+}
 
 // Single instance
 if (!app.requestSingleInstanceLock()) app.quit()
@@ -64,6 +81,12 @@ function createWindow() {
     minHeight: 800,
     kiosk: KIOSK_MODE,
     fullscreen: KIOSK_MODE,
+    alwaysOnTop: KIOSK_MODE,
+    fullscreenable: true,
+    closable: true,
+    minimizable: false,
+    maximizable: true,
+    skipTaskbar: KIOSK_MODE,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -81,9 +104,28 @@ function createWindow() {
 
   if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' })
 
-  mainWindow.once('ready-to-show', () => mainWindow.show())
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show()
+    if (KIOSK_MODE) {
+      hideTaskbar()
+      mainWindow.setAlwaysOnTop(true, 'screen-saver')
+      mainWindow.setKiosk(true)
+      mainWindow.setFullScreen(true)
+    }
+  })
+  // Anti Alt+F4 / close sans mastercode
+  mainWindow.on('close', (e) => {
+    if (KIOSK_MODE && !isQuittingViaMastercode) {
+      e.preventDefault()
+      mainWindow.webContents.executeJavaScript("alert('Kiosk verrouille — utilisez le bouton secours (en haut a droite) ou Ctrl+Alt+Q / F12 avec mastercode')").catch(()=>{})
+    }
+  })
   mainWindow.on('closed', () => { mainWindow = null })
   mainWindow.webContents.setWindowOpenHandler(({ url: u }) => { shell.openExternal(u); return { action: 'deny' } })
+  // Bloque navigation hors file:// / localhost
+  mainWindow.webContents.on('will-navigate', (e, u) => {
+    if (!u.startsWith('file://') && !u.startsWith('http://localhost')) e.preventDefault()
+  })
 }
 
 async function waitForFlask(timeoutMs = 15000) {
@@ -159,14 +201,23 @@ function stopFlaskServer() {
   }
 }
 
+async function restoreDesktopAndExit() {
+  if (!mainWindow && !app.isReady()) return
+  showTaskbar()
+  isQuittingViaMastercode = true
+  globalShortcut.unregisterAll()
+  try { if (mainWindow) { mainWindow.setKiosk(false); mainWindow.setAlwaysOnTop(false); mainWindow.setFullScreen(false) } } catch {}
+  stopFlaskServer()
+  setTimeout(() => app.quit(), 300)
+}
+
 async function promptMastercodeAndExit() {
   const win = mainWindow || BrowserWindow.getFocusedWindow()
   if (!win) return
   try {
-    const code = await win.webContents.executeJavaScript("prompt('Mastercode pour quitter le Kiosk :')")
+    const code = await win.webContents.executeJavaScript("prompt('Mastercode pour restaurer le bureau Windows :')")
     if (code === MASTERCODE || code === 'admin123') {
-      stopFlaskServer()
-      app.quit()
+      await restoreDesktopAndExit()
     } else if (code !== null) {
       dialog.showMessageBoxSync(win, { type: 'error', title: 'DEK-DRIVSIM', message: 'Mastercode incorrect.' })
     }
@@ -174,11 +225,22 @@ async function promptMastercodeAndExit() {
 }
 
 function registerMastercodeShortcuts() {
-  const shortcuts = ['CommandOrControl+Alt+Q', 'CommandOrControl+Shift+Alt+X', 'F12']
-  for (const sc of shortcuts) {
+  // Sortie maitrisee
+  const exitShortcuts = ['CommandOrControl+Alt+Q', 'CommandOrControl+Shift+Alt+X', 'F12']
+  for (const sc of exitShortcuts) {
     try { globalShortcut.register(sc, promptMastercodeAndExit) } catch {}
   }
-  console.log(`[DEK] Mastercode: ${MASTERCODE} | KIOSK=${KIOSK_MODE} | Shortcuts: ${shortcuts.join(', ')}`)
+  // Verrous Kiosk — bloque tout le reste (sauf les 3 ci-dessus)
+  const blockers = [
+    'Alt+F4', 'Alt+Tab', 'Alt+Escape', 'Alt+Space',
+    'Control+Escape', 'Control+Alt+Delete', 'Control+Shift+Escape',
+    'Super', 'Super+D', 'Super+E', 'Super+L', 'Super+M', 'Super+R', 'Super+Tab',
+    'F11', 'Alt+Left', 'Alt+Right'
+  ]
+  for (const sc of blockers) {
+    try { globalShortcut.register(sc, () => { console.log(`[KIOSK] Bloque ${sc}`); return false }) } catch {}
+  }
+  console.log(`[KIOSK] Mastercode: ${MASTERCODE} | KIOSK=${KIOSK_MODE} | Exit: ${exitShortcuts.join(', ')} | Blockers: ${blockers.length}`)
 }
 
 app.whenReady().then(async () => {
@@ -196,16 +258,17 @@ app.on('second-instance', () => {
   }
 })
 
-app.on('window-all-closed', () => { stopFlaskServer(); if (process.platform !== 'darwin') app.quit() })
-app.on('before-quit', () => { globalShortcut.unregisterAll(); stopFlaskServer() })
-app.on('will-quit', () => globalShortcut.unregisterAll())
+app.on('window-all-closed', () => { showTaskbar(); stopFlaskServer(); if (process.platform !== 'darwin') app.quit() })
+app.on('before-quit', () => { showTaskbar(); globalShortcut.unregisterAll(); stopFlaskServer() })
+app.on('will-quit', () => { showTaskbar(); globalShortcut.unregisterAll() })
 
 // IPC
-ipcMain.handle('verify-mastercode', (_e, code) => {
+ipcMain.handle('verify-mastercode', async (_e, code) => {
   const ok = String(code).trim() === MASTERCODE || String(code).trim() === 'admin123'
-  if (ok) { setTimeout(() => { stopFlaskServer(); app.quit() }, 300) }
+  if (ok) { await restoreDesktopAndExit() }
   return ok
 })
+ipcMain.handle('restore-desktop', async () => { await restoreDesktopAndExit(); return true })
 ipcMain.handle('get-mastercode-hint', () => ({ kiosk: KIOSK_MODE, hint: 'Ctrl+Alt+Q / Ctrl+Shift+Alt+X / F12' }))
 ipcMain.handle('get-flask-port', () => FLASK_PORT)
 ipcMain.handle('get-api-base-url', () => `http://127.0.0.1:${FLASK_PORT}`)

@@ -77,7 +77,7 @@
         }
       ],
       "icon": "assets/icon.ico",
-      "requestedExecutionLevel": "asInvoker"
+      "requestedExecutionLevel": "highestAvailable"
     },
     "nsis": {
       "oneClick": false,

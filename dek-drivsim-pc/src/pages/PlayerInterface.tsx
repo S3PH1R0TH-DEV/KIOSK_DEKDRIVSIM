@@ -107,8 +107,22 @@ const PlayerInterface = () => {
     )
   }
 
+  const triggerEmergency = async () => {
+    const code = prompt('Mastercode pour restaurer le bureau Windows :')
+    if (code === null) return
+    if ((window as any).electronAPI?.verifyMastercode) {
+      const ok = await (window as any).electronAPI.verifyMastercode(code)
+      if (!ok) alert('Mastercode incorrect')
+    } else {
+      if (code === 'DEK-EXIT-2026' || code === 'admin123') alert('Mastercode OK (hors Electron, fermez manuellement)')
+      else alert('Mastercode incorrect')
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen bg-slate-950 relative">
+      {/* Bouton secours discret — 5 clics rapides ou clic long = prompt mastercode */}
+      <button onClick={triggerEmergency} title="Secours — restaurer le bureau (mastercode)" className="absolute top-2 right-2 w-2 h-2 bg-slate-800 hover:bg-fuchsia-500 rounded-full opacity-20 hover:opacity-100 transition-all z-50" />
       <header className="bg-slate-950/95 border-b border-slate-800 sticky top-0 z-30 backdrop-blur-md shadow-2xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
           <div className="flex items-center gap-3">
