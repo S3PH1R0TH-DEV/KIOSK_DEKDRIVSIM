@@ -7,6 +7,7 @@ Il gère de manière autonome l'initialisation de la base de données, la sécur
 
 from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 import random
 import secrets
@@ -16,6 +17,11 @@ import os
 import sys
 import csv
 import io
+import logging
+import socket
+
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s %(message)s')
+logger = logging.getLogger('dekdrivsim')
 
 def _generate_strong_admin_password() -> str:
     # 16 chars, au moins 1 maj, 1 min, 1 chiffre, 1 symbole - jamais devinable par caissier
@@ -477,17 +483,31 @@ def get_ticket_by_code(code):
     conn.close()
     return dict(row) if row else None
 
+def _is_hashed(pw: str) -> bool:
+    return pw.startswith('pbkdf2:') or pw.startswith('scrypt:')
+
+def _verify_password(stored: str, provided: str) -> bool:
+    if _is_hashed(stored):
+        try:
+            return check_password_hash(stored, provided)
+        except Exception:
+            return False
+    return stored == provided
+
+def _hash_password(pw: str) -> str:
+    return generate_password_hash(pw)
+
 def create_player(username, password, initial_balance=0, referred_by_code=None, driving_school_id=None):
     conn = get_db()
     cursor = conn.cursor()
     now = datetime.now().isoformat()
     ref_code = f"DEK-{username.upper()}"
-    
+    hashed_pw = _hash_password(password)
     try:
         cursor.execute('''
             INSERT INTO players (username, password, balance, status, referral_code, referred_by_code, driving_school_id, created_at)
             VALUES (?, ?, ?, 'active', ?, ?, ?, ?)
-        ''', (username, password, initial_balance, ref_code, referred_by_code, driving_school_id, now))
+        ''', (username, hashed_pw, initial_balance, ref_code, referred_by_code, driving_school_id, now))
         
         if referred_by_code:
             cursor.execute("SELECT username FROM players WHERE referral_code = ?", (referred_by_code,))
@@ -779,11 +799,18 @@ def start_player_session(terminal_id, username, password):
     conn = get_db()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT * FROM players WHERE username = ? AND password = ? AND status = 'active'", (username, password))
+    cursor.execute("SELECT * FROM players WHERE username = ? AND status = 'active'", (username,))
     player = cursor.fetchone()
-    if not player:
+    if not player or not _verify_password(player['password'], password):
         conn.close()
         return False, "Identifiants incorrects ou compte suspendu"
+    # Migration transparente : si mdp en clair, on le hashe
+    if not _is_hashed(player['password']):
+        try:
+            cursor.execute("UPDATE players SET password=? WHERE id=?", (_hash_password(password), player['id']))
+            conn.commit()
+        except Exception:
+            pass
         
     cursor.execute("SELECT * FROM terminals WHERE id = ?", (terminal_id,))
     terminal = cursor.fetchone()
@@ -1152,30 +1179,46 @@ def index():
 def role_setup():
     return jsonify({'message': 'Utiliser POST /api/setup-role avec {ip, password}'}), 200
 
+_setup_role_attempts = {}
 @app.route('/api/setup-role', methods=['POST'])
 def api_setup_role():
+    # Rate-limit audit P0 : 5 tentatives / minute / IP
+    ip_key = request.remote_addr or 'unknown'
+    now_ts = datetime.now().timestamp()
+    attempts = [t for t in _setup_role_attempts.get(ip_key, []) if now_ts - t < 60]
+    if len(attempts) >= 5:
+        logger.warning(f"[SECURITY] Rate limit /api/setup-role IP={ip_key}")
+        return jsonify({'success': False, 'message': 'Trop de tentatives, reessayez dans 1 minute'}), 429
     data = request.get_json(silent=True) or {}
     password = (data.get('password') or '').strip()
-    # L'IP fournie par le client (utile pour Electron/Capacitor) sinon remote_addr
     client_ip = (data.get('ip') or request.remote_addr or '127.0.0.1').strip()
 
-    # Si aucun password fourni mais qu'un rôle est déjà mémorisé -> auto-login
     existing = get_device_role(client_ip)
     if not password and existing in ('admin', 'cashier'):
+        logger.info(f"[AUTH] Auto-login {existing} IP={client_ip}")
         return jsonify({'success': True, 'role': existing, 'redirect': f'/{existing}'})
 
     settings = get_settings()
-    admin_pwd = settings.get('admin_password')  # plus de fallback admin123
-    cashier_pwd = settings.get('cashier_password', 'caissier123')  # caissier reste caissier123 volontairement
+    admin_pwd = settings.get('admin_password')
+    cashier_pwd = settings.get('cashier_password', 'caissier123')
+    # Support hash pour admin/cashier si migre
+    admin_ok = False
+    if admin_pwd:
+        admin_ok = _verify_password(admin_pwd, password) if _is_hashed(admin_pwd) else (password == admin_pwd)
+    cashier_ok = _verify_password(cashier_pwd, password) if _is_hashed(cashier_pwd) else (password == cashier_pwd)
 
-    if admin_pwd and password == admin_pwd:
+    if admin_ok:
+        logger.info(f"[AUTH] Login admin OK IP={client_ip}")
         set_device_role(client_ip, 'admin')
         return jsonify({'success': True, 'role': 'admin', 'redirect': '/admin'})
-    elif password == cashier_pwd:
+    elif cashier_ok:
+        logger.info(f"[AUTH] Login cashier OK IP={client_ip}")
         set_device_role(client_ip, 'cashier')
         return jsonify({'success': True, 'role': 'cashier', 'redirect': '/cashier'})
 
-    # Pas de rôle mémorisé et password invalide -> message clair
+    attempts.append(now_ts)
+    _setup_role_attempts[ip_key] = attempts
+    logger.warning(f"[AUTH] Echec login IP={client_ip} attempts={len(attempts)}")
     if not password:
         return jsonify({'success': False, 'message': 'Veuillez saisir votre code d\'activation'})
     return jsonify({'success': False, 'message': 'Code d\'activation incorrect'})
@@ -1533,9 +1576,16 @@ def api_delete_game(game_id):
 @app.route('/api/settings', methods=['POST'])
 def api_update_settings():
     data = request.get_json(silent=True) or {}
-    # Whitelist des clés modifiables
     allowed = {'cyber_name','currency','hourly_rate','wifi_ssid','wifi_password','admin_password','cashier_password','cashier_referral_bonus'}
-    filtered = {k: str(v).strip() for k, v in data.items() if k in allowed and str(v).strip()}
+    filtered = {}
+    for k, v in data.items():
+        if k in allowed and str(v).strip():
+            val = str(v).strip()
+            # Audit P0 : hasher les mots de passe settings
+            if k in ('admin_password','cashier_password'):
+                val = _hash_password(val)
+                logger.info(f"[SETTINGS] Mot de passe {k} mis a jour (hash)")
+            filtered[k] = val
     if not filtered:
         return jsonify({'success': False, 'message': 'Aucun paramètre valide'}), 400
     update_settings(filtered)
@@ -1578,11 +1628,35 @@ def api_dashboard_stats():
 
 @app.route('/api/settings', methods=['GET'])
 def api_get_settings():
-    # Lecture publique des settings non sensibles pour l'APK/PC
-    # On filtre admin_password/cashier_password (jamais renvoye en clair)
     s = get_settings()
     safe = {k: v for k, v in s.items() if k not in ('admin_password', 'cashier_password')}
     return jsonify(safe)
+
+@app.route('/api/server-ip', methods=['GET'])
+def api_server_ip():
+    # Audit §5 : APK-PC com — l'APK recupere l'IP LAN du PC pour DEK_API_BASE
+    # Utilise par LoginPage isCapacitor pour afficher / QR
+    try:
+        hostname = socket.gethostname()
+        # Cherche IP LAN non-loopback
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        lan_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        lan_ip = '127.0.0.1'
+        hostname = 'unknown'
+    # Liste toutes les IPs
+    all_ips = []
+    try:
+        for info in socket.getaddrinfo(hostname, None):
+            ip = info[4][0]
+            if '.' in ip and not ip.startswith('127.'):
+                all_ips.append(ip)
+        all_ips = sorted(set(all_ips))
+    except Exception:
+        pass
+    return jsonify({'lan_ip': lan_ip, 'hostname': hostname, 'all_ips': all_ips, 'port': 5000, 'url': f'http://{lan_ip}:5000'})
 
 if __name__ == '__main__':
     # La console Windows utilise cp1252 par défaut : sans ce basculement en UTF-8,
