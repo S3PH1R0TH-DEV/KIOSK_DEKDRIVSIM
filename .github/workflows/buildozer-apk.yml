@@ -15,9 +15,9 @@ jobs:
           path: |
             ~/.buildozer
             .buildozer
-          key: ${{ runner.os }}-buildozer-v1-${{ hashFiles('buildozer.spec') }}
+          key: ${{ runner.os }}-buildozer-v2-pip23-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            ${{ runner.os }}-buildozer-v1-
+            ${{ runner.os }}-buildozer-v2-pip23-
 
       - name: Decode Keystore
         env:
@@ -42,7 +42,14 @@ jobs:
 
       - name: Build with Buildozer (Docker kivy/buildozer)
         run: |
-          docker run --rm -v "$PWD":/home/user/hostcwd -v "$HOME/.buildozer":/home/user/.buildozer --entrypoint bash kivy/buildozer -c "pip install --quiet pip==23.3.1 && buildozer android release"
+          docker run --rm -v "$PWD":/home/user/hostcwd -v "$HOME/.buildozer":/home/user/.buildozer --entrypoint bash kivy/buildozer -c "
+            pip install --quiet pip==23.3.1
+            # Patch p4a qui fait 'pip install -U pip' -> force 23.3.1 pour eviter BuildDependencyInstallError python3.14/pip26
+            find /home/user -type f -name '*.py' -path '*pythonforandroid*' -exec sed -i 's/pip install -U pip/pip install pip==23.3.1/g' {} \; 2>/dev/null || true
+            find /home/user/hostcwd -type f -name '*.py' -exec sed -i 's/pip install -U pip/pip install pip==23.3.1/g' {} \; 2>/dev/null || true
+            pip install --quiet pip==23.3.1
+            buildozer android release
+          "
         env:
           P4A_RELEASE_KEYSTORE: release.keystore
           P4A_RELEASE_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
