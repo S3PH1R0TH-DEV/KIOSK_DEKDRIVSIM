@@ -34,6 +34,12 @@ jobs:
           ls -l release.keystore
           file release.keystore
 
+      - name: Fix pip venv corrompu (BuildDependencyInstallError)
+        run: |
+          rm -rf .buildozer/android/platform/build-*/build/venv 2>/dev/null || true
+          rm -rf ~/.buildozer/android/platform/build-*/build/venv 2>/dev/null || true
+          echo "venv nettoye"
+
       - name: Build with Buildozer (Docker kivy/buildozer)
         run: |
           docker run --rm -v "$PWD":/home/user/hostcwd -v "$HOME/.buildozer":/home/user/.buildozer kivy/buildozer android release
