@@ -53,11 +53,9 @@ android.presplash_color = #04050a
 # DEPENDANCES
 # =============================================================================
 
-# La recette flask de python-for-android n'installe PAS ses propres dépendances
-# (elle les déclare via python_depends et se contente d'avertir). click et
-# markupsafe doivent donc être listés explicitement, sinon `import flask` lève
-# un ModuleNotFoundError au lancement et le serveur ne démarre jamais.
-requirements = python3,kivy,pyjnius,android,setuptools,flask,jinja2,werkzeug,markupsafe,itsdangerous,click,blinker,sqlite3
+# Flask via p4a : on liste explicitement ses deps pure-python (pip) + markupsafe via recette locale
+# sqlite3 est stdlib (pas pip) et blinker est optionnel (retire pour eviter conflit pip --platform android)
+requirements = python3,kivy,pyjnius,android,setuptools,flask,jinja2,werkzeug,markupsafe,itsdangerous,click
 
 orientation = portrait
 fullscreen = 1
