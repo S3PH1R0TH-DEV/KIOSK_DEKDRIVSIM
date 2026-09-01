@@ -91,7 +91,7 @@ async function waitForFlask(timeoutMs = 15000) {
   while (Date.now() - start < timeoutMs) {
     try {
       await new Promise((resolve, reject) => {
-        const req = http.get(`http://127.0.0.1:${FLASK_PORT}/api/settings`, (res) => {
+        const req = http.get(`http://127.0.0.1:${FLASK_PORT}/api/health`, (res) => {
           res.resume()
           if (res.statusCode === 200) resolve()
           else reject(new Error('status ' + res.statusCode))
