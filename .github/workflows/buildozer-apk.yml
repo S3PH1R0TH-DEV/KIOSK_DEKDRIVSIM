@@ -36,7 +36,7 @@ jobs:
 
       - name: Build with Buildozer (Docker kivy/buildozer)
         run: |
-          docker run --rm -v "$PWD":/home/user/hostcwd -v "$HOME/.buildozer":/home/user/.buildozer kivy/buildozer:latest sh -c "cd /home/user/hostcwd && buildozer android release"
+          docker run --rm -v "$PWD":/home/user/hostcwd -v "$HOME/.buildozer":/home/user/.buildozer kivy/buildozer android release
         env:
           P4A_RELEASE_KEYSTORE: release.keystore
           P4A_RELEASE_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
