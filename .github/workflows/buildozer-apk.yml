@@ -47,7 +47,7 @@ jobs:
       - name: Install Buildozer deps
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq openjdk-17-jdk unzip zip libncurses5-dev libffi-dev libssl-dev autoconf automake libtool pkg-config zlib1g-dev liblzo2-dev
+          sudo apt-get install -y -qq openjdk-17-jdk unzip zip libncurses5-dev libffi-dev libssl-dev autoconf automake libtool libtool-bin libltdl-dev pkg-config zlib1g-dev liblzo2-dev cmake ninja-build
           python -m pip install --upgrade pip==23.3.1 setuptools==68 wheel==0.43.0
           pip install buildozer==1.5.0 cython==0.29.36
 
