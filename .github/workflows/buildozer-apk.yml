@@ -1,4 +1,4 @@
-name: Build APK Buildozer (legacy APK serveur) - manual only
+name: Build APK Buildozer (APK serveur signe) - manual only
 
 on:
   workflow_dispatch:
@@ -27,33 +27,31 @@ jobs:
             echo "Error: KEYSTORE_BASE64 is empty"
             exit 1
           fi
-          # Nettoyage et d├®codage
           printf "%s" "$KEYSTORE_BASE64" | tr -d '\n\r ' | base64 -d > release.keystore
-          # Diagnostic
           echo "=== Keystore Info ==="
           ls -l release.keystore
           file release.keystore
 
-      - name: Fix pip venv corrompu (BuildDependencyInstallError)
+      - name: Fix pip venv corrompu
         run: |
           rm -rf .buildozer/android/platform/build-*/build/venv 2>/dev/null || true
           rm -rf ~/.buildozer/android/platform/build-*/build/venv 2>/dev/null || true
           echo "venv nettoye"
 
-      - name: Setup Python 3.10 (evite pip 26 / python3.14 BuildDependencyInstallError)
+      - name: Setup Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
           cache: 'pip'
 
-      - name: Install Buildozer deps (Ubuntu)
+      - name: Install Buildozer deps
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq openjdk-17-jdk unzip zip libncurses5-dev libffi-dev libssl-dev autoconf automake libtool pkg-config zlib1g-dev liblzo2-dev
           python -m pip install --upgrade pip==23.3.1 setuptools==68 wheel==0.43.0
           pip install buildozer==1.5.0 cython==0.29.36
 
-      - name: Build with Buildozer (host, python3.10)
+      - name: Build APK Release signe
         run: |
           buildozer android release
         env:
@@ -68,6 +66,13 @@ jobs:
           name: dek-drivsim-release
           path: bin/*.apk
 
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-logs
+          path: .buildozer/logs/
+
       - name: Create Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
@@ -75,8 +80,8 @@ jobs:
           tag_name: latest
           name: Latest Build (Buildozer)
           body: |
-            **Build automatique DEK-DRIVSIM** ÔÇö ${{ github.sha }}
-            APK Release sign├® via Buildozer.
+            **Build automatique DEK-DRIVSIM** — ${{ github.sha }}
+            APK Release signe via Buildozer.
           files: bin/*.apk
           make_latest: true
         env:
