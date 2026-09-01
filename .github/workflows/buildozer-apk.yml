@@ -42,7 +42,7 @@ jobs:
 
       - name: Build with Buildozer (Docker kivy/buildozer)
         run: |
-          docker run --rm -v "$PWD":/home/user/hostcwd -v "$HOME/.buildozer":/home/user/.buildozer kivy/buildozer android release
+          docker run --rm -v "$PWD":/home/user/hostcwd -v "$HOME/.buildozer":/home/user/.buildozer --entrypoint bash kivy/buildozer -c "pip install --quiet pip==23.3.1 && buildozer android release"
         env:
           P4A_RELEASE_KEYSTORE: release.keystore
           P4A_RELEASE_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
