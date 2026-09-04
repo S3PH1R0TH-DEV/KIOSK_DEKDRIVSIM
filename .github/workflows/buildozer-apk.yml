@@ -53,7 +53,22 @@ jobs:
 
       - name: Build APK Release signe
         run: |
+          # Patch p4a venv pip upgrade qui casse pip 26/python3.14 BuildDependencyInstallError
+          # On wrap le buildozer pour patcher a la volee entre 2 essais
+          set +e
           buildozer android release
+          RET=$?
+          if [ $RET -ne 0 ]; then
+            echo "Premier buildozer echoue ($RET), patch p4a pip -U pip -> pip==23.3.1 et retry"
+            find .buildozer -type f -name "*.py" -exec sed -i 's/pip install -U pip/pip install pip==23.3.1/g' {} \; 2>/dev/null || true
+            find $HOME/.buildozer -type f -name "*.py" -exec sed -i 's/pip install -U pip/pip install pip==23.3.1/g' {} \; 2>/dev/null || true
+            # purge venv corrompu et relance
+            rm -rf .buildozer/android/platform/build-*/build/venv 2>/dev/null || true
+            rm -rf $HOME/.buildozer/android/platform/build-*/build/venv 2>/dev/null || true
+            buildozer android release
+            RET=$?
+          fi
+          exit $RET
         env:
           P4A_RELEASE_KEYSTORE: release.keystore
           P4A_RELEASE_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
