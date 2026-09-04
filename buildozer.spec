@@ -29,7 +29,7 @@ source.include_exts = py,png,jpg,jpeg,html,js,css,db,xml,svg,ico,ttf,woff,woff2
 # android_assets ne sert qu'à buildozer (icône/presplash, lus directement via
 # icon.filename et presplash.filename) : l'embarquer en plus dans l'app
 # dupliquerait 1,9 Mo pour rien.
-source.exclude_dirs = bin,.buildozer,uploads,__pycache__,certs,p4a-recipes,android_assets
+source.exclude_dirs = bin,.buildozer,uploads,__pycache__,certs,p4a-recipes,android_assets,dek-drivsim-pc,docs,scripts,.github
 
 # (list) Fichiers à exclure
 # presplash.png n'est référencé par aucun template : il ne sert que d'écran de
