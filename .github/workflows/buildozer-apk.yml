@@ -15,9 +15,9 @@ jobs:
           path: |
             ~/.buildozer
             .buildozer
-          key: ${{ runner.os }}-buildozer-v2-pip23-${{ hashFiles('buildozer.spec') }}
+          key: ${{ runner.os }}-buildozer-v3-clean-${{ hashFiles('buildozer.spec') }}
           restore-keys: |
-            ${{ runner.os }}-buildozer-v2-pip23-
+            ${{ runner.os }}-buildozer-v3-clean-
 
       - name: Decode Keystore
         env:
@@ -32,11 +32,13 @@ jobs:
           ls -l release.keystore
           file release.keystore
 
-      - name: Fix pip venv corrompu
+      - name: Clean stale buildozer app+dist (conflit dek-drivsim-pc precedent)
         run: |
+          rm -rf .buildozer/android/app 2>/dev/null || true
+          rm -rf .buildozer/android/platform/build-*/dists 2>/dev/null || true
           rm -rf .buildozer/android/platform/build-*/build/venv 2>/dev/null || true
           rm -rf ~/.buildozer/android/platform/build-*/build/venv 2>/dev/null || true
-          echo "venv nettoye"
+          echo "stale app/dist/venv nettoyes"
 
       - name: Setup Python 3.10
         uses: actions/setup-python@v5
@@ -50,26 +52,22 @@ jobs:
           sudo apt-get install -y -qq openjdk-17-jdk unzip zip libncurses5-dev libffi-dev libssl-dev autoconf automake libtool libtool-bin libltdl-dev pkg-config zlib1g-dev liblzo2-dev cmake ninja-build
           python -m pip install --upgrade pip==23.3.1 setuptools==68 wheel==0.43.0
           pip install buildozer==1.5.0 cython==0.29.36
-          # Patch p4a si deja installe (evite pip -U pip -> 26)
+          # Patch p4a si deja installe (evite pip -U pip -> 26 / BuildDependencyInstallError)
           PYFORA=$(python -c "import pythonforandroid; print(pythonforandroid.__file__)" 2>/dev/null || echo "")
           if [ -n "$PYFORA" ]; then echo "p4a at $PYFORA"; sed -i 's/pip install -U pip/pip install pip==23.3.1/g' $(dirname $PYFORA)/build.py 2>/dev/null || true; fi
 
       - name: Build APK Release signe
         run: |
-          # Patch p4a venv pip upgrade qui casse pip 26/python3.14 BuildDependencyInstallError
-          # On wrap le buildozer pour patcher a la volee entre 2 essais
           set +e
           buildozer android release
           RET=$?
           if [ $RET -ne 0 ]; then
-            echo "Premier buildozer echoue ($RET), patch p4a pip -U pip -> pip==23.3.1 et retry"
-            find .buildozer -type f -name "*.py" -exec sed -i 's/pip install -U pip/pip install pip==23.3.1/g' {} \; 2>/dev/null || true
-            find $HOME/.buildozer -type f -name "*.py" -exec sed -i 's/pip install -U pip/pip install pip==23.3.1/g' {} \; 2>/dev/null || true
-            # purge venv corrompu et relance
-            rm -rf .buildozer/android/platform/build-*/build/venv 2>/dev/null || true
-            rm -rf $HOME/.buildozer/android/platform/build-*/build/venv 2>/dev/null || true
-            buildozer android release
-            RET=$?
+            echo "=== DIAGNOSTIC processReleaseMainManifest ==="
+            find .buildozer -name "AndroidManifest.xml" -path "*dists*" -exec echo "--- {} ---" \; -exec cat {} \; 2>/dev/null | head -n 120 || true
+            echo "=== manifest args utilises ==="
+            cat manifest_application_args.xml || true
+            echo "=== res/xml ==="
+            find .buildozer -path "*res/xml*" -name "*.xml" 2>/dev/null | head || true
           fi
           exit $RET
         env:
