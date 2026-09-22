@@ -56,18 +56,35 @@ jobs:
           PYFORA=$(python -c "import pythonforandroid; print(pythonforandroid.__file__)" 2>/dev/null || echo "")
           if [ -n "$PYFORA" ]; then echo "p4a at $PYFORA"; sed -i 's/pip install -U pip/pip install pip==23.3.1/g' $(dirname $PYFORA)/build.py 2>/dev/null || true; fi
 
+      - name: Patch p4a clone (pip -U pip -> pip==23.3.1)
+        run: |
+          # Buildozer clone p4a dans .buildozer pendant le build (pas site-packages) :
+          # le clone persiste via le cache, on le patch avant de builder.
+          for f in .buildozer/android/platform/python-for-android/pythonforandroid/build.py; do
+            if [ -f "$f" ]; then
+              echo "Patch $f"
+              sed -i 's/pip install -U pip/pip install pip==23.3.1/g' "$f"
+              grep -n "pip==23.3.1" "$f" | head -3
+            else
+              echo "p4a clone absent (premier build), sera patche au retry"
+            fi
+          done
+
       - name: Build APK Release signe
         run: |
           set +e
           buildozer android release
           RET=$?
           if [ $RET -ne 0 ]; then
-            echo "=== DIAGNOSTIC processReleaseMainManifest ==="
+            echo "=== 1er buildozer echoue ($RET), patch p4a + retry ==="
+            find .buildozer -path "*python-for-android*" -name "build.py" -exec sed -i 's/pip install -U pip/pip install pip==23.3.1/g' {} \; 2>/dev/null || true
+            rm -rf .buildozer/android/platform/build-*/build/venv 2>/dev/null || true
+            buildozer android release
+            RET=$?
+          fi
+          if [ $RET -ne 0 ]; then
+            echo "=== DIAGNOSTIC ==="
             find .buildozer -name "AndroidManifest.xml" -path "*dists*" -exec echo "--- {} ---" \; -exec cat {} \; 2>/dev/null | head -n 120 || true
-            echo "=== manifest args utilises ==="
-            cat manifest_application_args.xml || true
-            echo "=== res/xml ==="
-            find .buildozer -path "*res/xml*" -name "*.xml" 2>/dev/null | head || true
           fi
           exit $RET
         env:
