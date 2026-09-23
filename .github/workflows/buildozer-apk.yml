@@ -56,19 +56,34 @@ jobs:
           PYFORA=$(python -c "import pythonforandroid; print(pythonforandroid.__file__)" 2>/dev/null || echo "")
           if [ -n "$PYFORA" ]; then echo "p4a at $PYFORA"; sed -i 's/pip install -U pip/pip install pip==23.3.1/g' $(dirname $PYFORA)/build.py 2>/dev/null || true; fi
 
-      - name: Patch p4a clone (pip -U pip -> pip==23.3.1)
+      - name: Patch p4a clone (pip + template cleartext)
         run: |
-          # Buildozer clone p4a dans .buildozer pendant le build (pas site-packages) :
-          # le clone persiste via le cache, on le patch avant de builder.
+          # 1. Buildozer clone p4a dans .buildozer pendant le build (pas site-packages) :
+          #    le clone persiste via le cache, on le patch avant de builder.
           for f in .buildozer/android/platform/python-for-android/pythonforandroid/build.py; do
             if [ -f "$f" ]; then
-              echo "Patch $f"
+              echo "Patch pip $f"
               sed -i 's/pip install -U pip/pip install pip==23.3.1/g' "$f"
               grep -n "pip==23.3.1" "$f" | head -3
             else
               echo "p4a clone absent (premier build), sera patche au retry"
             fi
           done
+          # 2. Contournement bug buildozer 1.5.0 extra_manifest_application_arguments
+          #    (guillemets litteraux injectes -> MergeFailureException) : on ecrit
+          #    usesCleartextTraffic directement dans le template p4a.
+          T=$(find .buildozer/android/platform/python-for-android -path "*_sdl_common/build/templates/AndroidManifest.tmpl.xml" 2>/dev/null | head -1)
+          if [ -n "$T" ]; then
+            if grep -q "usesCleartextTraffic" "$T"; then
+              echo "Template deja patche : $T"
+            else
+              sed -i 's|<application android:label="@string/app_name"|& android:usesCleartextTraffic="true"|' "$T"
+              echo "Template patche : $T"
+            fi
+            grep -n "usesCleartextTraffic" "$T"
+          else
+            echo "Template p4a absent (premier build), sera patche au retry"
+          fi
 
       - name: Build APK Release signe
         run: |
@@ -76,9 +91,16 @@ jobs:
           buildozer android release
           RET=$?
           if [ $RET -ne 0 ]; then
-            echo "=== 1er buildozer echoue ($RET), patch p4a + retry ==="
+            echo "=== 1er buildozer echoue ($RET), patch p4a + regen dist + retry ==="
             find .buildozer -path "*python-for-android*" -name "build.py" -exec sed -i 's/pip install -U pip/pip install pip==23.3.1/g' {} \; 2>/dev/null || true
+            T=$(find .buildozer/android/platform/python-for-android -path "*_sdl_common/build/templates/AndroidManifest.tmpl.xml" 2>/dev/null | head -1)
+            if [ -n "$T" ] && ! grep -q "usesCleartextTraffic" "$T"; then
+              sed -i 's|<application android:label="@string/app_name"|& android:usesCleartextTraffic="true"|' "$T"
+              echo "Template patche au retry : $T"
+            fi
             rm -rf .buildozer/android/platform/build-*/build/venv 2>/dev/null || true
+            rm -rf .buildozer/android/platform/build-*/dists 2>/dev/null || true
+            rm -rf .buildozer/android/app 2>/dev/null || true
             buildozer android release
             RET=$?
           fi

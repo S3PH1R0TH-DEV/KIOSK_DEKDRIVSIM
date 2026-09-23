@@ -72,15 +72,17 @@ android.permissions = android.permission.INTERNET,android.permission.ACCESS_NETW
 android.wakelock = True
 
 # --- AUTORISATION DU TRAFIC HTTP EN CLAIR ---
-# Ces deux clés remplacent android.manifest.application_attributes,
-# android.manifest.attributes et android.network_security_config, qui
-# N'EXISTENT PAS dans buildozer et étaient donc silencieusement ignorées.
-#
-# 1. Copie le fichier dans res/xml/network_security_config.xml
-android.res_xml = %(source.dir)s/network_security_config.xml
-# 2. Injecte les attributs android:usesCleartextTraffic et
-#    android:networkSecurityConfig dans le tag <application> du manifeste.
-android.extra_manifest_application_arguments = %(source.dir)s/manifest_application_args.xml
+# DESACTIVE (buildozer 1.5.0) : android.py fait
+#   open(f).read().replace('"', '\\"') puis '--extra-manifest-application-arguments="{...}"'
+# et Popen(liste) sans shell -> p4a injecte litteralement
+#   "android:usesCleartextTraffic=\"true\"" dans AndroidManifest.xml => MergeFailureException.
+# (Prouve par diagnostic CI 09/2026 sur dists/*/src/main/AndroidManifest.xml.)
+# Contournement : cleartext injecte directement dans le template p4a en CI
+# (patch _sdl_common/build/templates/AndroidManifest.tmpl.xml, voir workflow).
+# usesCleartextTraffic=true seul autorise deja tout le HTTP local (WebView 127.0.0.1 + LAN),
+# network_security_config.xml devient inutile. Fichiers gardes pour historique.
+# android.res_xml = %(source.dir)s/network_security_config.xml
+# android.extra_manifest_application_arguments = %(source.dir)s/manifest_application_args.xml
 
 # (int) Version d'API Android cible pour la compilation (Android 14)
 android.api = 34
