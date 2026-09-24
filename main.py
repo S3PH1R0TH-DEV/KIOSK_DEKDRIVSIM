@@ -41,7 +41,35 @@ FLASK_HOST = '127.0.0.1'         # adresse utilisée par la WebView embarquée
 FLASK_PORT = 5000
 FLASK_URL = f"http://{FLASK_HOST}:{FLASK_PORT}/"
 STARTUP_TIMEOUT = 40.0
+CLIENT_TIMEOUT = 15.0            # attente du serveur distant en mode client
 RETRY_DELAY = 0.3
+
+# --- MODE CLIENT (téléphone caissier) ---
+# Si dek_mode.json contient {"mode": "client", "server_ip": "192.168.x.x"},
+# Flask local n'est PAS démarré : la WebView pointe vers le serveur du patron.
+# Fichier écrit via POST /api/mode-client (localhost uniquement).
+# Retour au mode serveur : effacer les données de l'application.
+def _get_app_data_dir():
+    if 'ANDROID_ARGUMENT' in os.environ or os.environ.get('ANDROID_PRIVATE'):
+        return os.environ.get('ANDROID_PRIVATE', '/data/data/org.dekdrivsim/files')
+    return os.path.join(APP_DIR, 'cybercafe_manager')
+
+def _read_mode():
+    try:
+        import json as _json
+        with open(os.path.join(_get_app_data_dir(), 'dek_mode.json'), 'r', encoding='utf-8') as f:
+            return _json.load(f)
+    except Exception:
+        return {}
+
+MODE = _read_mode()
+if isinstance(MODE, dict) and MODE.get('mode') == 'client' and MODE.get('server_ip'):
+    CLIENT_MODE = True
+    REMOTE_HOST = MODE['server_ip']
+    FLASK_URL = f"http://{REMOTE_HOST}:{FLASK_PORT}/"
+else:
+    CLIENT_MODE = False
+    REMOTE_HOST = None
 
 # Trace complète de l'erreur si le serveur meurt au démarrage (import, DB, port occupé...)
 SERVER_ERROR = None
@@ -65,15 +93,16 @@ def start_flask_server():
         print(f"[FLASK ERROR]\n{SERVER_ERROR}")
 
 
-def wait_for_server(timeout=STARTUP_TIMEOUT):
+def wait_for_server(timeout=STARTUP_TIMEOUT, host=None):
     """Attend que le port réponde. Sort immédiatement si le serveur a planté."""
+    target = host or FLASK_HOST
     deadline = time.time() + timeout
     while time.time() < deadline:
         if SERVER_ERROR:
             return False
         try:
-            with socket.create_connection((FLASK_HOST, FLASK_PORT), timeout=1.0):
-                print("[FLASK] Serveur prêt")
+            with socket.create_connection((target, FLASK_PORT), timeout=1.0):
+                print(f"[FLASK] Serveur prêt ({target}:{FLASK_PORT})")
                 return True
         except OSError:
             time.sleep(RETRY_DELAY)
@@ -98,7 +127,10 @@ class DEKDRIVSIMApp(App):
         self.lbl_status.bind(size=lambda widget, *_: setattr(widget, 'text_size', widget.size))
         self.layout.add_widget(self.lbl_status)
 
-        threading.Thread(target=start_flask_server, daemon=True).start()
+        if CLIENT_MODE:
+            print(f"[MODE] Client : pas de serveur local, cible {FLASK_URL}")
+        else:
+            threading.Thread(target=start_flask_server, daemon=True).start()
 
         # Laisse la fenêtre Kivy s'afficher avant de lancer l'attente du serveur.
         Clock.schedule_once(
@@ -113,7 +145,16 @@ class DEKDRIVSIMApp(App):
 
     def _boot(self):
         """Exécuté hors du thread UI : attend le serveur puis bascule l'affichage."""
-        if not wait_for_server():
+        if CLIENT_MODE:
+            if not wait_for_server(timeout=CLIENT_TIMEOUT, host=REMOTE_HOST):
+                self._set_status(
+                    "⚠️ SERVEUR PATRON INJOIGNABLE\n\n"
+                    f"Aucune réponse de {FLASK_URL}\n"
+                    "Vérifiez le Wi-Fi et que le téléphone serveur est allumé.",
+                    error=True,
+                )
+                return
+        elif not wait_for_server():
             detail = SERVER_ERROR or (
                 "Le serveur local n'a pas répondu dans le délai imparti "
                 f"({STARTUP_TIMEOUT:.0f}s)."

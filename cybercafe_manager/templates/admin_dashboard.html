@@ -442,7 +442,17 @@
                             <input type="number" id="setting-hourly-rate" value="{{ settings.hourly_rate }}" required
                                    class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500 font-bold">
                         </div>
-                        <div class="sm:col-span-2 flex items-end">
+                        <div class="sm:col-span-2">
+                            <label class="block text-[8px] font-bold text-cyan-400 uppercase mb-1">Code Caissier (à taper sur son téléphone)</label>
+                            <input type="text" id="setting-cashier-password" placeholder="Vide = inchangé" autocomplete="off"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-cyan-500 font-mono">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-[8px] font-bold text-fuchsia-400 uppercase mb-1">Nouveau Code Propriétaire (vide = inchangé)</label>
+                            <input type="password" id="setting-admin-password" placeholder="Vide = inchangé" autocomplete="new-password"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500 font-mono">
+                        </div>
+                        <div class="sm:col-span-4 flex items-end">
                             <button type="submit" id="btn-save-settings" class="w-full py-2.5 bg-gradient-to-r from-fuchsia-600 to-fuchsia-500 text-white font-bold rounded-lg text-xs uppercase tracking-widest transition-all border border-fuchsia-500/20 shadow">
                                 <i class="fa-solid fa-save"></i> Enregistrer
                             </button>
@@ -843,6 +853,40 @@
         function toggleElement(id) {
             const el = document.getElementById(id);
             if (el) el.classList.toggle('hidden');
+        }
+
+        // Sauvegarde des paramètres système + codes d'activation (vide = inchangé)
+        async function saveSettings(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-save-settings');
+            const payload = {
+                cyber_name: document.getElementById('setting-cyber-name').value.trim(),
+                wifi_ssid: document.getElementById('setting-wifi-ssid').value.trim(),
+                wifi_password: document.getElementById('setting-wifi-password').value.trim(),
+                hourly_rate: document.getElementById('setting-hourly-rate').value.trim()
+            };
+            const cashierCode = document.getElementById('setting-cashier-password').value.trim();
+            const adminCode = document.getElementById('setting-admin-password').value.trim();
+            if (cashierCode) payload.cashier_password = cashierCode;
+            if (adminCode) payload.admin_password = adminCode;
+            btn.disabled = true;
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                showToast(result.message || (result.success ? 'Paramètres enregistrés.' : 'Erreur.'));
+                if (result.success) {
+                    document.getElementById('setting-cashier-password').value = '';
+                    document.getElementById('setting-admin-password').value = '';
+                }
+            } catch (err) {
+                showToast("Erreur de communication avec le serveur.");
+            } finally {
+                btn.disabled = false;
+            }
         }
 
         // Show customizable Toast

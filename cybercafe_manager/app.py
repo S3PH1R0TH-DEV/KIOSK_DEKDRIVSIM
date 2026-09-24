@@ -16,6 +16,7 @@ except ImportError:
     _HAS_CORS = False
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
+import json
 import random
 import secrets
 import string
@@ -100,6 +101,26 @@ def _get_admin_pwd_path():
         return os.path.join(os.path.dirname(DB_PATH), 'admin_password.txt')
 
 ADMIN_PWD_PATH = _get_admin_pwd_path()
+
+# Mode client APK (telephone caissier) : main.py lit ce fichier au demarrage.
+# Meme dossier inscriptible que la DB (prive Android / APPDATA Windows).
+MODE_PATH = os.path.join(os.path.dirname(DB_PATH), 'dek_mode.json')
+
+LOCALHOST_IPS = ('127.0.0.1', '::1', '::ffff:127.0.0.1')
+
+def _is_valid_lan_ip(ip):
+    """IPv4 valide, non-loopback (le mode client pointe vers un autre appareil)."""
+    try:
+        parts = ip.strip().split('.')
+        if len(parts) != 4:
+            return False
+        if not all(p.isdigit() and 0 <= int(p) <= 255 for p in parts):
+            return False
+        if ip.strip().startswith('127.'):
+            return False
+        return True
+    except Exception:
+        return False
 
 def get_db():
     # Timeout de 30 secondes et pragma busy_timeout pour éviter les blocages de concurrence.
@@ -1220,10 +1241,12 @@ def role_setup():
     # lui-meme (127.0.0.1) et seulement tant qu'aucun admin n'est enregistre.
     # Les PC/telephones du LAN ne voient jamais ce bloc (pas de fuite reseau).
     reveal = None
-    if client_ip in ('127.0.0.1', '::1', '::ffff:127.0.0.1'):
+    is_local = client_ip in LOCALHOST_IPS
+    if is_local:
         if not _admin_role_exists():
             reveal = _revealable_admin_password()
-    return render_template('role_setup.html', client_ip=client_ip, reveal=reveal)
+    return render_template('role_setup.html', client_ip=client_ip, reveal=reveal,
+                           is_local=is_local)
 
 @app.route('/admin')
 def admin_dashboard():
@@ -1741,6 +1764,38 @@ def api_get_settings():
     s = get_settings()
     safe = {k: v for k, v in s.items() if k not in ('admin_password', 'cashier_password')}
     return jsonify(safe)
+
+@app.route('/api/mode', methods=['GET'])
+def api_get_mode():
+    # Lecture du mode APK (serveur/client). Localhost uniquement.
+    if (request.remote_addr or '') not in LOCALHOST_IPS:
+        return jsonify({'success': False, 'message': 'Local uniquement'}), 403
+    try:
+        with open(MODE_PATH, 'r', encoding='utf-8') as f:
+            mode = json.load(f)
+        return jsonify({'success': True, 'mode': mode.get('mode', 'server'),
+                        'server_ip': mode.get('server_ip')})
+    except Exception:
+        return jsonify({'success': True, 'mode': 'server', 'server_ip': None})
+
+@app.route('/api/mode-client', methods=['POST'])
+def api_set_mode_client():
+    # Bascule CET appareil en client du serveur patron. LOCALHOST UNIQUEMENT :
+    # un poste du LAN ne doit jamais pouvoir desactiver votre serveur !
+    if (request.remote_addr or '') not in LOCALHOST_IPS:
+        return jsonify({'success': False, 'message': 'Local uniquement'}), 403
+    data = request.get_json(silent=True) or {}
+    server_ip = (data.get('server_ip') or '').strip()
+    if not _is_valid_lan_ip(server_ip):
+        return jsonify({'success': False, 'message': 'IP du serveur invalide (ex : 192.168.1.10)'}), 400
+    try:
+        with open(MODE_PATH, 'w', encoding='utf-8') as f:
+            json.dump({'mode': 'client', 'server_ip': server_ip}, f)
+        logger.info(f"[MODE] Bascule en client vers {server_ip}")
+        return jsonify({'success': True,
+                        'message': f'Appareil en mode client vers {server_ip}. Redemarrez l application.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Ecriture impossible : {e}'}), 500
 
 @app.route('/api/server-ip', methods=['GET'])
 def api_server_ip():

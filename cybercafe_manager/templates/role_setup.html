@@ -58,6 +58,20 @@
             <span id="auth-alert-msg">Code incorrect</span>
         </div>
 
+        {% if is_local %}
+        <!-- Mode client : transformer CET appareil en client du serveur patron (ex : telephone caissier) -->
+        <div class="w-full mb-4 p-4 rounded-xl text-xs bg-cyan-500/10 border border-cyan-500/30 text-left">
+            <div class="font-bold uppercase tracking-widest mb-1 text-cyan-300 text-center"><i class="fa-solid fa-mobile-screen"></i> Cet appareil = client du patron ?</div>
+            <div class="relative flex gap-2">
+                <input type="text" id="client-server-ip" placeholder="IP du serveur (ex : 192.168.1.10)"
+                       class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white font-mono text-xs focus:outline-none focus:border-cyan-500">
+                <button type="button" onclick="submitModeClient()" id="btn-mode-client"
+                        class="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl text-xs uppercase transition-all">OK</button>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-1.5 leading-relaxed">L'application redémarrera vers le serveur du patron : tapez-y ensuite le <strong>code caissier créé dans votre console</strong>. Retour serveur : effacer les données de l'appli.</p>
+        </div>
+        {% endif %}
+
         <!-- Role Activation Form -->
         <form onsubmit="submitRoleActivation(event)" class="w-full space-y-4 font-mono text-xs">
             <div class="relative">
@@ -79,6 +93,29 @@
     </div>
 
     <script>
+        async function submitModeClient() {
+            const ip = document.getElementById('client-server-ip').value.trim();
+            const btn = document.getElementById('btn-mode-client');
+            if (!ip) { alert("Saisissez l'IP du téléphone serveur (ex : 192.168.1.10)."); return; }
+            btn.disabled = true;
+            try {
+                const response = await fetch('/api/mode-client', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ server_ip: ip })
+                });
+                const result = await response.json();
+                alert(result.message || (result.success ? 'Mode client actif.' : 'Erreur.'));
+                if (result.success) {
+                    document.getElementById('client-server-ip').value = '';
+                }
+            } catch (err) {
+                alert("Erreur de communication avec l'application.");
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
         async function submitRoleActivation(e) {
             e.preventDefault();
             const password = document.getElementById('role-password').value;
