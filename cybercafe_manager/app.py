@@ -391,6 +391,29 @@ def set_device_role(ip_address, role):
     conn.close()
     return True
 
+def _admin_role_exists():
+    """Un appareil a-t-il deja le role admin ? (le one-shot ne s'affiche qu'avant)."""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM device_roles WHERE role = 'admin'")
+        n = cursor.fetchone()[0]
+        conn.close()
+        return n > 0
+    except Exception:
+        return True  # doute -> ne rien reveler
+
+def _revealable_admin_password():
+    """Code proprio en clair, ou None s'il est hash (choisi par l'utilisateur) ou absent."""
+    try:
+        s = get_settings()
+        pwd = s.get('admin_password')
+        if pwd and not _is_hashed(pwd):
+            return pwd
+    except Exception:
+        pass
+    return None
+
 def get_all_terminals():
     conn = get_db()
     cursor = conn.cursor()
@@ -1193,7 +1216,14 @@ def role_setup():
     role = get_device_role(client_ip)
     if role:
         return redirect(url_for('index'))
-    return render_template('role_setup.html', client_ip=client_ip)
+    # One-shot : affiche le code proprio UNIQUEMENT sur l'appareil serveur
+    # lui-meme (127.0.0.1) et seulement tant qu'aucun admin n'est enregistre.
+    # Les PC/telephones du LAN ne voient jamais ce bloc (pas de fuite reseau).
+    reveal = None
+    if client_ip in ('127.0.0.1', '::1', '::ffff:127.0.0.1'):
+        if not _admin_role_exists():
+            reveal = _revealable_admin_password()
+    return render_template('role_setup.html', client_ip=client_ip, reveal=reveal)
 
 @app.route('/admin')
 def admin_dashboard():

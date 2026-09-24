@@ -43,6 +43,15 @@
             Saisissez le code d'accès de sécurité de l'établissement pour activer et configurer cet appareil de manière permanente.
         </p>
 
+        {% if reveal %}
+        <!-- One-shot premier lancement : code proprio visible uniquement ici (localhost, avant activation admin) -->
+        <div class="w-full mb-4 p-4 rounded-xl text-xs bg-amber-500/10 border border-amber-500/30 text-amber-300">
+            <div class="font-bold uppercase tracking-widest mb-1"><i class="fa-solid fa-triangle-exclamation"></i> Premier lancement — notez ce code</div>
+            <div class="font-mono text-lg font-black text-white tracking-widest select-all">{{ reveal }}</div>
+            <div class="mt-1 text-[10px] text-amber-200/70">Code Propriétaire de CET appareil. Il ne s'affichera plus une fois l'activation faite. Le caissier utilise <span class="font-mono">caissier123</span>.</div>
+        </div>
+        {% endif %}
+
         <!-- Message Display -->
         <div id="auth-alert" class="hidden w-full mb-4 p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-500">
             <i class="fa-solid fa-circle-exclamation text-base"></i>
