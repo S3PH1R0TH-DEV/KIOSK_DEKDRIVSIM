@@ -6,7 +6,14 @@ Il gère de manière autonome l'initialisation de la base de données, la sécur
 """
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, Response
-from flask_cors import CORS
+try:
+    # Optionnel : absent de l'APK (buildozer.spec) volontairement.
+    # Inutile en APK-serveur (WebView 127.0.0.1 + navigateurs LAN = same-origin).
+    from flask_cors import CORS
+    _HAS_CORS = True
+except ImportError:
+    CORS = None
+    _HAS_CORS = False
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 import random
@@ -35,9 +42,10 @@ def _generate_strong_admin_password() -> str:
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('DEK_SECRET_KEY', 'senet_cybercafe_secret_key')
-# CORS : autorise uniquement le réseau local ; en Electron/Capacitor le origin est file:// ou capacitor://
-# On n'active pas supports_credentials avec wildcard (invalide côté navigateur)
-CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=False)
+# CORS : utile seulement pour frontends file:///capacitor:// (mode PC-serveur archive).
+# En APK-serveur tout est same-origin -> on saute si flask_cors absent (pas de crash).
+if _HAS_CORS:
+    CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=False)
 # Limite taille payload + JSON strict
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
 
@@ -1533,10 +1541,6 @@ def api_get_evals_alias():
 @app.route('/api/connection-logs', methods=['GET'])
 def api_get_logs_alias():
     return jsonify(get_all_connection_logs())
-
-@app.route('/api/settings', methods=['GET'])
-def api_get_settings():
-    return jsonify(get_settings())
 
 @app.route('/api/players', methods=['GET'])
 def api_get_players():
