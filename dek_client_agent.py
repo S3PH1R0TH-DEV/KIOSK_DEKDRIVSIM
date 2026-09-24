@@ -17,6 +17,7 @@ import threading
 import time
 import urllib.request
 import urllib.error
+import urllib.parse
 import ctypes
 from ctypes import wintypes
 
@@ -25,6 +26,24 @@ try:
     HAS_WINREG = True
 except ImportError:
     HAS_WINREG = False
+
+# =============================================================================
+# LOG FICHIER (l'exe --noconsole n'a pas de console : les print y disparaissent)
+# =============================================================================
+LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent.log")
+
+def log(*args):
+    msg = " ".join(str(a) for a in args)
+    try:
+        sys.stdout.write(msg + "\n")
+        sys.stdout.flush()
+    except Exception:
+        pass
+    try:
+        with open(LOG_PATH, 'a', encoding='utf-8') as f:
+            f.write(msg + "\n")
+    except Exception:
+        pass
 
 # =============================================================================
 # CONFIGURATION (CORRIGE AUDIT : plus de 127.0.0.1 dur)
@@ -79,7 +98,7 @@ def _scan_for_server(port=5000, timeout=0.4):
     base = _get_local_subnet()
     if not base:
         return None
-    print(f"[SCAN] Recherche serveur sur {base}.0/24:{port} ...")
+    log(f"[SCAN] Recherche serveur sur {base}.0/24:{port} ...")
     def _probe(i):
         ip = f"{base}.{i}"
         try:
@@ -102,7 +121,7 @@ def _scan_for_server(port=5000, timeout=0.4):
             if ip:
                 # Annule le reste
                 for f in futs: f.cancel()
-                print(f"[SCAN] Serveur trouve: {ip}:{port}")
+                log(f"[SCAN] Serveur trouve: {ip}:{port}")
                 return ip
     return None
 
@@ -123,17 +142,18 @@ if not _raw_ip or _raw_ip == "127.0.0.1":
     else:
         SERVER_IP = _raw_ip or "127.0.0.1"
         if SERVER_IP == "127.0.0.1":
-            print("[WARN] Aucun serveur trouve, fallback 127.0.0.1 — lancez avec --server 192.168.x.x")
+            log("[WARN] Aucun serveur trouve, fallback 127.0.0.1 — lancez avec --server 192.168.x.x")
 else:
     SERVER_IP = _raw_ip
 
 PC_NAME = _raw_pc
 HEARTBEAT_INTERVAL_MS = 5000
 
+PC_URL = urllib.parse.quote(PC_NAME, safe='')
 SERVER_URL = f"http://{SERVER_IP}:{SERVER_PORT}"
-CLIENT_URL = f"{SERVER_URL}/client/{PC_NAME}"
-STATUS_API_URL = f"{SERVER_URL}/api/client/status/{PC_NAME}"
-print(f"[CONFIG] SERVER={SERVER_IP}:{SERVER_PORT} PC={PC_NAME} -> {STATUS_API_URL}")
+CLIENT_URL = f"{SERVER_URL}/client/{PC_URL}"
+STATUS_API_URL = f"{SERVER_URL}/api/client/status/{PC_URL}"
+log(f"[CONFIG] SERVER={SERVER_IP}:{SERVER_PORT} PC={PC_NAME} -> {STATUS_API_URL}")
 
 # =============================================================================
 # CONSTANTES WIN32
@@ -145,6 +165,10 @@ VK_LWIN = 0x5B
 VK_RWIN = 0x5C
 VK_TAB = 0x09
 VK_ESCAPE = 0x1B
+VK_F4 = 0x73
+VK_Q = 0x51
+WM_USER = 0x0400
+WM_DEK_EXIT = WM_USER + 1  # sortie secours via Ctrl+Alt+Q (traitee dans window_proc)
 VK_LCONTROL = 0xA2
 VK_RCONTROL = 0xA3
 VK_LMENU = 0xA4
@@ -261,9 +285,9 @@ def ensure_admin():
     Si non-élevé, relance le processus avec l'invite UAC (verbe 'runas').
     """
     if ctypes.windll.shell32.IsUserAnAdmin():
-        print("[UAC] Privilèges administrateur confirmés.")
+        log("[UAC] Privilèges administrateur confirmés.")
         return True
-    print("[UAC] Relance avec élévation administrateur...")
+    log("[UAC] Relance avec élévation administrateur...")
     params = " ".join([f'"{a}"' for a in sys.argv[1:]])
     if getattr(sys, 'frozen', False):
         # Mode .exe PyInstaller : on relance l'exécutable lui-même
@@ -296,6 +320,8 @@ class DEKClientAgent:
         self.hhook = None
         self.hinst = ctypes.windll.kernel32.GetModuleHandleW(None)
         self._heartbeat_thread = None
+        self._watchdog_thread = None
+        self._browser_started = False
         self._registry_modified = False
 
     # -------------------------------------------------------------------------
@@ -307,7 +333,7 @@ class DEKClientAgent:
         les touches Windows au niveau du pilote clavier du noyau.
         """
         if not HAS_WINREG:
-            print("[REGISTRY] Module winreg indisponible.")
+            log("[REGISTRY] Module winreg indisponible.")
             return
         try:
             key = winreg.OpenKey(
@@ -323,7 +349,7 @@ class DEKClientAgent:
                 key, self.REG_VALUE, 0, winreg.REG_BINARY, SCANCODE_MAP_BINARY
             )
             self._registry_modified = True
-            print("[REGISTRY] Scancode Map écrite. Touches Windows désactivées au prochain démarrage.")
+            log("[REGISTRY] Scancode Map écrite. Touches Windows désactivées au prochain démarrage.")
         finally:
             winreg.CloseKey(key)
 
@@ -343,13 +369,13 @@ class DEKClientAgent:
             )
             try:
                 winreg.DeleteValue(key, self.REG_VALUE)
-                print("[REGISTRY] Scancode Map supprimée. Touches Windows restaurées.")
+                log("[REGISTRY] Scancode Map supprimée. Touches Windows restaurées.")
             except FileNotFoundError:
                 pass
             finally:
                 winreg.CloseKey(key)
         except Exception as e:
-            print(f"[REGISTRY ERROR] Restauration impossible: {e}")
+            log(f"[REGISTRY ERROR] Restauration impossible: {e}")
 
     # -------------------------------------------------------------------------
     # MASQUAGE BARRE DES TÂCHES
@@ -360,14 +386,14 @@ class DEKClientAgent:
         if self.hwnd_taskbar:
             ctypes.windll.user32.ShowWindow(self.hwnd_taskbar, SW_HIDE)
             ctypes.windll.user32.EnableWindow(self.hwnd_taskbar, False)
-            print("[TASKBAR] Masquée.")
+            log("[TASKBAR] Masquée.")
 
     def show_taskbar(self):
         """Restaure la barre des tâches Windows."""
         if self.hwnd_taskbar:
             ctypes.windll.user32.ShowWindow(self.hwnd_taskbar, SW_SHOW)
             ctypes.windll.user32.EnableWindow(self.hwnd_taskbar, True)
-            print("[TASKBAR] Restaurée.")
+            log("[TASKBAR] Restaurée.")
 
     # -------------------------------------------------------------------------
     # VERROU 1 : HOOK CLAVIER BAS NIVEAU
@@ -383,31 +409,51 @@ class DEKClientAgent:
             0
         )
         if self.hhook:
-            print("[HOOK] Crochet clavier installé.")
+            log("[HOOK] Crochet clavier installé.")
         else:
-            print("[HOOK ERROR] Échec d'installation.")
+            log("[HOOK ERROR] Échec d'installation.")
 
     def uninstall_hook(self):
         """Désinstalle proprement le crochet clavier."""
         if self.hhook:
             ctypes.windll.user32.UnhookWindowsHookEx(self.hhook)
             self.hhook = None
-            print("[HOOK] Crochet désinstallé.")
+            log("[HOOK] Crochet désinstallé.")
 
     def keyboard_hook(self, nCode, wParam, lParam):
         """
         Traitement DU HOOK : ULTRA-RAPIDE (< 1000ms) pour éviter
         la désinstallation silencieuse par LowLevelHooksTimeout.
+        Seuls GetAsyncKeyState / GetForegroundWindow / PostMessageW y sont
+        appelés (tous < 1ms). Le shutdown passe par WM_DEK_EXIT pour éviter
+        tout deadlock (jamais d'UnHook/Destroy depuis le callback).
         """
         if nCode != HC_ACTION:
             return ctypes.windll.user32.CallNextHookEx(None, nCode, wParam, lParam)
         kb = ctypes.cast(lParam, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
         vk = kb.vkCode
+        alt_down = bool(kb.flags & LLKHF_ALTDOWN)
         # --- BLOCAGE ABSOLU LWIN / RWIN ---
         if vk in (VK_LWIN, VK_RWIN):
             return 1
+        # --- SORTIE SECOURS : Ctrl(G)+Alt(G)+Q -> restaure le bureau (via window_proc) ---
+        # Modifieurs GAUCHES uniquement : AltGr (Ctrl droit + Alt droit, ex AZERTY)
+        # ne doit jamais declencher la sortie.
+        if vk == VK_Q and alt_down:
+            lctrl = ctypes.windll.user32.GetAsyncKeyState(VK_LCONTROL) & 0x8000
+            lalt = ctypes.windll.user32.GetAsyncKeyState(VK_LMENU) & 0x8000
+            if lctrl and lalt:
+                if self.hwnd:
+                    ctypes.windll.user32.PostMessageW(self.hwnd, WM_DEK_EXIT, 0, 0)
+                return 1
+        # --- BLOCAGE ALT+F4 partout SAUF sur notre propre fenetre kiosk ---
+        # (Alt+F4 sur la fenetre noire = voie de sortie legitime -> WM_CLOSE -> shutdown)
+        if vk == VK_F4 and alt_down:
+            fg = ctypes.windll.user32.GetForegroundWindow()
+            if fg != self.hwnd:
+                return 1
         # --- BLOCAGE ALT+TAB / ALT+ESC ---
-        if kb.flags & LLKHF_ALTDOWN:
+        if alt_down:
             if vk in (VK_TAB, VK_ESCAPE):
                 return 1
         # --- BLOCAGE CTRL+ESC ---
@@ -432,7 +478,7 @@ class DEKClientAgent:
         wndclass.hbrBackground = ctypes.windll.gdi32.GetStockObject(4)  # BLACK_BRUSH
         wndclass.lpszClassName = self.WNDCLASS_NAME
         if not ctypes.windll.user32.RegisterClassExW(ctypes.byref(wndclass)):
-            print("[WINDOW] Échec d'enregistrement de la classe.")
+            log("[WINDOW] Échec d'enregistrement de la classe.")
             return
         screen_w = ctypes.windll.user32.GetSystemMetrics(0)
         screen_h = ctypes.windll.user32.GetSystemMetrics(1)
@@ -449,7 +495,7 @@ class DEKClientAgent:
                 self.hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE
             )
-            print("[WINDOW] Fenêtre Kiosk créée (plein écran, topmost).")
+            log("[WINDOW] Fenêtre Kiosk créée (plein écran, topmost).")
 
     def destroy_kiosk_window(self):
         """Détruit la fenêtre Kiosk et libère la classe."""
@@ -457,10 +503,14 @@ class DEKClientAgent:
             ctypes.windll.user32.DestroyWindow(self.hwnd)
             self.hwnd = None
             ctypes.windll.user32.UnregisterClassW(self.WNDCLASS_NAME, self.hinst)
-            print("[WINDOW] Fenêtre détruite.")
+            log("[WINDOW] Fenêtre détruite.")
 
     def window_proc(self, hwnd, msg, wParam, lParam):
         """Procédure de fenêtre : gère la fermeture et bloque le clic droit."""
+        if msg == WM_DEK_EXIT:
+            # Sortie secours Ctrl+Alt+Q (postee depuis le hook, pas de deadlock)
+            self.shutdown()
+            return 0
         if msg == WM_CLOSE:
             self.shutdown()
             return 0
@@ -475,37 +525,89 @@ class DEKClientAgent:
     # COMMUNICATION SERVEUR
     # -------------------------------------------------------------------------
     def heartbeat_thread(self):
-        """Envoi périodique du statut au serveur Flask."""
+        """Ping periodique du serveur Flask (GET /api/client/status = ping_terminal)."""
+        failures = 0
+        was_up = True
         while self.running:
             try:
-                data = json.dumps({
-                    "pc_name": PC_NAME,
-                    "status": "online",
-                    "tick": ctypes.windll.kernel32.GetTickCount()
-                }).encode('utf-8')
-                req = urllib.request.Request(
-                    STATUS_API_URL,
-                    data=data,
-                    headers={"Content-Type": "application/json"},
-                    method="POST"
-                )
-                with urllib.request.urlopen(req, timeout=5):
+                with urllib.request.urlopen(STATUS_API_URL, timeout=5):
                     pass
-            except Exception:
-                pass
+                if not was_up:
+                    log("[HEARTBEAT] Serveur de nouveau joignable.")
+                failures = 0
+                was_up = True
+            except Exception as e:
+                failures += 1
+                was_up = False
+                # Log discret : 1ere erreur + rappel toutes les ~60s (12 x 5s)
+                if failures == 1 or failures % 12 == 0:
+                    log(f"[HEARTBEAT ERROR] Serveur injoignable ({failures}x): {e}")
             ctypes.windll.kernel32.Sleep(HEARTBEAT_INTERVAL_MS)
 
-    def open_client_browser(self):
-        """Ouvre le navigateur par défaut vers l'interface client."""
-        def _open():
-            ctypes.windll.kernel32.Sleep(800)
-            try:
+    def _find_chromium(self):
+        """Localise Chrome ou Edge pour un lancement --kiosk verrouille."""
+        candidates = []
+        for base in (os.environ.get('PROGRAMFILES'), os.environ.get('PROGRAMFILES(X86)'),
+                     os.environ.get('LOCALAPPDATA')):
+            if not base:
+                continue
+            candidates.append(os.path.join(base, 'Google', 'Chrome', 'Application', 'chrome.exe'))
+            candidates.append(os.path.join(base, 'Microsoft', 'Edge', 'Application', 'msedge.exe'))
+        for exe in candidates:
+            if exe and os.path.isfile(exe):
+                return exe
+        return None
+
+    def launch_kiosk_browser(self):
+        """Lance le navigateur en mode kiosk (--kiosk + incognito), fallback navigateur defaut."""
+        import subprocess
+        exe = self._find_chromium()
+        try:
+            if exe:
+                subprocess.Popen([exe, '--kiosk', '--incognito', CLIENT_URL],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                log(f"[BROWSER] Kiosk : {exe} -> {CLIENT_URL}")
+            else:
                 import webbrowser
                 webbrowser.open(CLIENT_URL)
-                print(f"[BROWSER] Ouverture : {CLIENT_URL}")
-            except Exception as e:
-                print(f"[BROWSER ERROR] {e}")
+                log(f"[BROWSER] Ouverture (defaut) : {CLIENT_URL}")
+            self._browser_started = True
+        except Exception as e:
+            log(f"[BROWSER ERROR] {e}")
+
+    def open_client_browser(self):
+        """Ouvre le navigateur client après un court delai."""
+        def _open():
+            ctypes.windll.kernel32.Sleep(800)
+            if self.running:
+                self.launch_kiosk_browser()
         threading.Thread(target=_open, daemon=True).start()
+
+    def _any_browser_running(self):
+        """Detecte chrome/msedge/firefox via tasklist (watchdog)."""
+        import subprocess
+        try:
+            out = subprocess.check_output(['tasklist'], stderr=subprocess.DEVNULL,
+                                          timeout=10).decode('utf-8', errors='ignore').lower()
+            return ('chrome.exe' in out) or ('msedge.exe' in out) or ('firefox.exe' in out)
+        except Exception:
+            return True  # doute -> ne pas relancer en boucle
+
+    def watchdog_thread(self):
+        """Relance le navigateur kiosk s'il est ferme (anti-evasion navigateur)."""
+        # Laisse le temps au premier lancement + a la saisie du ticket
+        for _ in range(6):
+            if not self.running:
+                return
+            ctypes.windll.kernel32.Sleep(1000)
+        while self.running:
+            try:
+                if self._browser_started and not self._any_browser_running():
+                    log("[WATCHDOG] Navigateur ferme, relance kiosk...")
+                    self.launch_kiosk_browser()
+            except Exception as e:
+                log(f"[WATCHDOG ERROR] {e}")
+            ctypes.windll.kernel32.Sleep(3000)
 
     # -------------------------------------------------------------------------
     # VERROU 1 : POMPE DE MESSAGES PRINCIPALE (Thread Principal)
@@ -515,8 +617,8 @@ class DEKClientAgent:
         Pompe de messages PeekMessageW non-bloquante.
         """
         msg = MSG()
-        print("[PUMP] Pompe de messages active. Kiosk verrouillé.")
-        print("[PUMP] Fermez la fenêtre ou appuyez sur ALT+F4 pour quitter.")
+        log("[PUMP] Pompe de messages active. Kiosk verrouillé.")
+        log("[PUMP] Sortie secours : Ctrl+Alt+Q, ou Alt+F4 sur la fenetre noire.")
         while self.running:
             if ctypes.windll.user32.PeekMessageW(
                 ctypes.byref(msg), None, 0, 0, PM_REMOVE
@@ -536,9 +638,9 @@ class DEKClientAgent:
         """Initialise l'agent Kiosk et démarre la boucle principale."""
         global agent_instance
         agent_instance = self
-        print("=" * 60)
-        print("  DEK-DRIVSIM Client Agent - Mode Kiosk Invincible")
-        print("=" * 60)
+        log("=" * 60)
+        log("  DEK-DRIVSIM Client Agent - Mode Kiosk Invincible")
+        log("=" * 60)
         self.setup_registry()
         self.hide_taskbar()
         self.create_kiosk_window()
@@ -546,6 +648,8 @@ class DEKClientAgent:
         self.running = True
         self._heartbeat_thread = threading.Thread(target=self.heartbeat_thread, daemon=True)
         self._heartbeat_thread.start()
+        self._watchdog_thread = threading.Thread(target=self.watchdog_thread, daemon=True)
+        self._watchdog_thread.start()
         self.open_client_browser()
         self.run_message_pump()
 
@@ -554,13 +658,13 @@ class DEKClientAgent:
         if not self.running:
             return
         self.running = False
-        print("\n[SHUTDOWN] Arrêt de l'agent Kiosk...")
+        log("\n[SHUTDOWN] Arrêt de l'agent Kiosk...")
         self.restore_registry()
         self.uninstall_hook()
         self.show_taskbar()
         self.destroy_kiosk_window()
         ctypes.windll.user32.PostQuitMessage(0)
-        print("[SHUTDOWN] Système restauré.")
+        log("[SHUTDOWN] Système restauré.")
 
     def emergency_cleanup(self):
         """Filet de sécurité en cas d'exception fatale."""
@@ -578,8 +682,8 @@ if __name__ == '__main__':
     try:
         agent.start()
     except KeyboardInterrupt:
-        print("\n[MAIN] Interruption clavier détectée.")
+        log("\n[MAIN] Interruption clavier détectée.")
     except Exception as e:
-        print(f"\n[MAIN ERROR] {e}")
+        log(f"\n[MAIN ERROR] {e}")
     finally:
         agent.emergency_cleanup()

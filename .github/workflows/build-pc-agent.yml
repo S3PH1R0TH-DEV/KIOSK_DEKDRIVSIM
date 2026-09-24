@@ -1,0 +1,55 @@
+name: Build PC Agent (dek_client_agent.exe) - manual only
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'dek_client_agent.py'
+      - '.github/workflows/build-pc-agent.yml'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Syntax check agent
+        run: python -m py_compile dek_client_agent.py
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Build exe (onefile, windowed)
+        run: pyinstaller --onefile --noconsole --name dek_client_agent dek_client_agent.py
+
+      - name: List dist
+        run: dir dist
+        shell: pwsh
+
+      - name: Upload exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dek-client-agent-exe
+          path: dist/dek_client_agent.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create Release (latest + tag)
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'latest' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'Latest Build' }}
+          files: dist/dek_client_agent.exe
+          generate_release_notes: true
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
