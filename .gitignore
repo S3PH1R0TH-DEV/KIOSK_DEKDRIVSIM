@@ -54,3 +54,6 @@ Thumbs.db
 *.log
 npm-debug.log*
 dekdrivsim-release.keystore
+
+# Memoire locale (ne pas pousser)
+MEMOIRE.md
