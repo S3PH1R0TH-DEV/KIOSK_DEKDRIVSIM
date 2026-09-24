@@ -113,9 +113,21 @@ jobs:
           exit $RET
         env:
           P4A_RELEASE_KEYSTORE: release.keystore
-          P4A_RELEASE_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.KEYSTORE_PASSWORD }}
           P4A_RELEASE_KEYALIAS: ${{ secrets.KEY_ALIAS }}
-          P4A_RELEASE_KEYALIAS_PASS: ${{ secrets.KEY_PASSWORD }}
+          P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Verify APK signature (echoue si unsigned)
+        run: |
+          APK=$(ls bin/*.apk | head -1)
+          echo "APK: $APK"
+          ls -lh "$APK"
+          APKSIGNER=$(find ~/.buildozer /opt/hostedtoolcache -name apksigner 2>/dev/null | head -1)
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --print-certs "$APK"
+          else
+            jarsigner -verify -verbose -certs "$APK" | head -20
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
