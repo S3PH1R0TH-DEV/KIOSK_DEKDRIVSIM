@@ -100,18 +100,22 @@ def _get_local_subnet():
     except Exception:
         return None
 
-def _scan_for_server(port=5000, timeout=0.4):
+def _scan_for_server(port=5000, timeout=1.0):
     base = _get_local_subnet()
     if not base:
+        log("[SCAN] Sous-reseau indetectable (pas de route IPv4).")
         return None
-    log(f"[SCAN] Recherche serveur sur {base}.0/24:{port} ...")
+    log(f"[SCAN] Recherche serveur sur {base}.0/24:{port} (timeout {timeout}s, ~20s max)...")
+    # Priorite aux IP les plus probables (passerelle/box + debut de plage DHCP)
+    priority = [1, 10, 11, 20, 2, 3, 100, 101, 102]
+    others = [i for i in range(1, 255) if i not in priority]
     def _probe(i):
         ip = f"{base}.{i}"
         try:
             with _sock.create_connection((ip, port), timeout=timeout):
                 # Verifie que c'est bien DEK (api/health)
                 try:
-                    with urllib.request.urlopen(f"http://{ip}:{port}/api/health", timeout=1) as r:
+                    with urllib.request.urlopen(f"http://{ip}:{port}/api/health", timeout=2) as r:
                         if r.getcode() == 200:
                             return ip
                 except Exception:
@@ -120,8 +124,8 @@ def _scan_for_server(port=5000, timeout=0.4):
         except Exception:
             return None
         return None
-    with _fut.ThreadPoolExecutor(max_workers=50) as ex:
-        futs = {ex.submit(_probe, i): i for i in range(1, 255)}
+    with _fut.ThreadPoolExecutor(max_workers=64) as ex:
+        futs = {ex.submit(_probe, i): i for i in (priority + others)}
         for fut in _fut.as_completed(futs):
             ip = fut.result()
             if ip:
@@ -129,6 +133,7 @@ def _scan_for_server(port=5000, timeout=0.4):
                 for f in futs: f.cancel()
                 log(f"[SCAN] Serveur trouve: {ip}:{port}")
                 return ip
+    log("[SCAN] Aucun serveur DEK trouve. Verifiez : meme Wi-Fi, APK lancee, pare-feu port 5000.")
     return None
 
 _cfg = _load_config()
