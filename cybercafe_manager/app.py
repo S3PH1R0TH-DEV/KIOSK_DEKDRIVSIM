@@ -204,10 +204,10 @@ def init_db():
     )
     ''')
     
-    # Table d'évaluation journalière du caissier gérant (14 jours d'essai)
+    # Table d'évaluation journalière du caissier gérant (7 jours d'essai)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS cashier_evaluations (
-        day_number INTEGER PRIMARY KEY, -- Jour 1 à 14
+        day_number INTEGER PRIMARY KEY, -- Jour 1 à 7
         rating INTEGER NOT NULL DEFAULT 0, -- Note sur 5 étoiles
         punctuality TEXT, -- 'good', 'late', 'absent'
         cash_accuracy TEXT, -- 'exact', 'short', 'over'
@@ -362,13 +362,17 @@ def init_db():
         ''', (now,))
     conn.commit()
 
-    # Initialisation de la grille d'évaluation caissier (14 jours)
+    # Initialisation de la grille d'évaluation caissier (7 jours)
     cursor.execute("SELECT COUNT(*) FROM cashier_evaluations")
     if cursor.fetchone()[0] == 0:
         evals = []
-        for d in range(1, 15):
+        for d in range(1, 8):
             evals.append((d, 0, 'good', 'exact', 0, '', ''))
         cursor.executemany("INSERT INTO cashier_evaluations (day_number, rating, punctuality, cash_accuracy, recruits_count, notes, evaluated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", evals)
+        conn.commit()
+    else:
+        # Migration 14 -> 7 jours (bases de test/pre-lancement uniquement)
+        cursor.execute("DELETE FROM cashier_evaluations WHERE day_number > 7")
         conn.commit()
 
     # Insertion de la bibliothèque de jeux par défaut
@@ -1415,11 +1419,30 @@ def export_connection_logs_csv():
 
 # --- API ENDPOINTS ---
 
+PRESENCE_ONLINE_SECONDS = 30  # heartbeat agent toutes les 5s + marge
+
+def _add_presence(terminals):
+    """Ajoute presence (online/offline) + last_seen_s depuis last_ping."""
+    now = datetime.now()
+    for t in terminals:
+        last = t.get('last_ping')
+        t['last_seen_s'] = None
+        t['presence'] = 'offline'
+        if last:
+            try:
+                age = (now - datetime.fromisoformat(last)).total_seconds()
+                t['last_seen_s'] = int(max(0, age))
+                if age <= PRESENCE_ONLINE_SECONDS:
+                    t['presence'] = 'online'
+            except Exception:
+                pass
+    return terminals
+
 @app.route('/api/terminals', methods=['GET'])
 def api_get_terminals():
     tick_all_sessions() # Update sessions with elapsed time
     terminals = get_all_terminals()
-    return jsonify(terminals)
+    return jsonify(_add_presence(terminals))
 
 @app.route('/api/terminal/<int:terminal_id>', methods=['GET'])
 def api_get_terminal(terminal_id):
@@ -1684,6 +1707,41 @@ def api_delete_school(school_id):
 def api_claim_referral(ref_id):
     claim_referral_bonus(ref_id)
     return jsonify({'success': True})
+
+# Challenge recrutement caissier : 200 CFA / recrue + bonus de palier journalier.
+RECRUIT_PER_BONUS = 200
+RECRUIT_TIERS = [(3, 500), (5, 1200), (10, 3000)]  # (recrues jour -> bonus CFA)
+
+@app.route('/api/cashier/recruits', methods=['GET'])
+def api_cashier_recruits():
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM referrals WHERE referrer_type = 'cashier' AND date(created_at) = date('now', 'localtime')")
+    today = cursor.fetchone()[0] or 0
+    cursor.execute("SELECT COUNT(*) FROM referrals WHERE referrer_type = 'cashier' AND created_at >= datetime('now', '-7 days', 'localtime')")
+    week = cursor.fetchone()[0] or 0
+    cursor.execute("SELECT COUNT(*) FROM referrals WHERE referrer_type = 'cashier'")
+    total = cursor.fetchone()[0] or 0
+    conn.close()
+    tier_bonus = 0
+    for at, bonus in RECRUIT_TIERS:
+        if today >= at:
+            tier_bonus = bonus
+    next_tier = None
+    for at, bonus in RECRUIT_TIERS:
+        if today < at:
+            next_tier = {'at': at, 'bonus': bonus, 'missing': at - today}
+            break
+    return jsonify({
+        'today': today,
+        'week': week,
+        'total': total,
+        'per_recruit': RECRUIT_PER_BONUS,
+        'tier_bonus': tier_bonus,
+        'bonus_today': today * RECRUIT_PER_BONUS + tier_bonus,
+        'next_tier': next_tier,
+        'tiers': [{'at': at, 'bonus': bonus} for at, bonus in RECRUIT_TIERS]
+    })
 
 @app.route('/api/cashier/evaluate', methods=['POST'])
 def api_evaluate_cashier():

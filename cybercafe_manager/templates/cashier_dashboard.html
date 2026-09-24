@@ -101,12 +101,37 @@
                     <span class="text-slate-500 text-[10px] block uppercase font-bold tracking-widest font-mono">Évaluation & Période d'Essai</span>
                     <strong class="text-sm font-bold text-white block mt-1">
                         {% if active_eval_day %}
-                        Jour {{ active_eval_day.day_number }} / 14 d'essai
+                        Jour {{ active_eval_day.day_number }} / 7 d'essai
                         {% else %}
                         Période d'essai validée !
                         {% endif %}
                     </strong>
                     <span class="text-[9px] text-slate-400 uppercase tracking-widest block font-mono">Score : 5/5</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- CHALLENGE RECRUTEMENT -->
+        <section class="bg-gradient-to-r from-fuchsia-950/40 to-cyan-950/40 border border-fuchsia-500/20 rounded-3xl p-5 shadow-xl">
+            <div class="flex flex-col md:flex-row md:items-center gap-4 justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-fuchsia-500/10 text-fuchsia-400 rounded-xl">
+                        <i class="fa-solid fa-trophy text-2xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 text-[10px] block uppercase font-bold tracking-widest font-mono">Challenge Recrutement (aujourd'hui)</span>
+                        <div class="mt-1 text-sm font-bold text-white font-mono">
+                            <span id="ch-today" class="text-fuchsia-400 text-xl font-black">0</span> recrue(s)
+                            · Prime : <span id="ch-bonus" class="text-emerald-400">0 CFA</span>
+                        </div>
+                        <div id="ch-next" class="text-[10px] text-slate-400 font-mono mt-0.5">Chargement...</div>
+                    </div>
+                </div>
+                <div class="flex-1 md:max-w-md w-full">
+                    <div class="h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                        <div id="ch-bar" class="h-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 rounded-full transition-all duration-500" style="width: 0%;"></div>
+                    </div>
+                    <div id="ch-tiers" class="text-[9px] text-slate-500 font-mono mt-1.5">200 CFA / recrue · Paliers : 3→+500 · 5→+1200 · 10→+3000</div>
                 </div>
             </div>
         </section>
@@ -594,6 +619,11 @@
                     }
 
                     const pcIcon = term.type === 'PC' ? '<i class="fa-solid fa-desktop text-[10px]"></i>' : '<i class="fa-solid fa-gamepad text-[10px]"></i>';
+                    const isOnline = term.presence === 'online';
+                    let seenText = 'jamais vu';
+                    if (term.last_seen_s !== null && term.last_seen_s !== undefined) {
+                        seenText = term.last_seen_s < 5 ? "à l'instant" : term.last_seen_s < 60 ? `il y a ${term.last_seen_s}s` : `il y a ${Math.floor(term.last_seen_s / 60)} min`;
+                    }
                     const h = `
                     <div class="${cardClass}">
                         <div class="${accentClass}"></div>
@@ -601,6 +631,11 @@
                             <div>
                                 <span class="text-[9px] text-slate-500 block uppercase font-bold font-mono tracking-widest">${pcIcon} ${term.type}</span>
                                 <h4 class="text-md font-bold text-white uppercase font-mono tracking-wider">${term.name}</h4>
+                                <div class="flex items-center gap-1.5 mt-1">
+                                    <span class="w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}"></span>
+                                    <span class="text-[9px] font-mono font-bold ${isOnline ? 'text-emerald-400' : 'text-slate-500'}">${isOnline ? 'EN LIGNE' : 'ÉTEINT / HORS LIGNE'}</span>
+                                    <span class="text-[9px] font-mono text-slate-600">· ${seenText}</span>
+                                </div>
                             </div>
                             <span class="${badgeClass}">${statusLabel}</span>
                         </div>
@@ -654,6 +689,26 @@
 
         setInterval(syncNow, 2500);
         syncNow();
+
+        // Challenge recrutement : compteurs + paliers (toutes les 10s)
+        async function syncChallenge() {
+            try {
+                const res = await fetch('/api/cashier/recruits');
+                const d = await res.json();
+                document.getElementById('ch-today').textContent = d.today;
+                document.getElementById('ch-bonus').textContent = d.bonus_today + ' CFA';
+                const next = d.next_tier;
+                const pct = next ? Math.min(100, Math.round(d.today / next.at * 100)) : 100;
+                document.getElementById('ch-bar').style.width = pct + '%';
+                document.getElementById('ch-next').textContent = next
+                    ? `Plus que ${next.missing} recrue(s) pour +${next.bonus} CFA (palier ${next.at})`
+                    : `Palier max atteint ! +${d.tier_bonus} CFA de bonus`;
+                document.getElementById('ch-tiers').textContent =
+                    `Semaine : ${d.week} · Total : ${d.total} · 200 CFA / recrue`;
+            } catch (e) { /* silencieux */ }
+        }
+        setInterval(syncChallenge, 10000);
+        syncChallenge();
     </script>
 </body>
 </html>
