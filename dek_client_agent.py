@@ -27,6 +27,12 @@ try:
 except ImportError:
     HAS_WINREG = False
 
+# wintypes.HCURSOR n'existe que sur Python recents (3.12+) : sur 3.10/3.11
+# la definition de WNDCLASSEXW leve AttributeError au lancement (exe CI = 3.11).
+# HANDLE a la meme taille, alias sûr sur toutes les versions.
+if not hasattr(wintypes, 'HCURSOR'):
+    wintypes.HCURSOR = wintypes.HANDLE
+
 # =============================================================================
 # LOG FICHIER (l'exe --noconsole n'a pas de console : les print y disparaissent)
 # =============================================================================
