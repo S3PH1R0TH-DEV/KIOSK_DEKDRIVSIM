@@ -102,6 +102,10 @@ android.allow_backup = True
 # non-interactif et la compilation s'arrête sur "Aidl not found".
 android.accept_sdk_license = True
 
+# (str) Format de sortie release : buildozer >= 1.4 sort un .aab par défaut,
+# le workflow attend bin/*.apk -> on force apk (signe via P4A_RELEASE_KEYSTORE).
+android.release_artifact = apk
+
 # =============================================================================
 # OPTIONS DE COMPILATION
 # =============================================================================
