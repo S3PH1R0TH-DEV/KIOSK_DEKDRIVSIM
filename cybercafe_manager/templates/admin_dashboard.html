@@ -8,6 +8,8 @@
     <script src="/static/vendor/tailwind.min.js"></script>
     <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css">
+    <!-- QRCode local (QR de l'URL serveur pour connecter d'autres appareils) -->
+    <script src="/static/vendor/qrcode.min.js"></script>
     <style>
         body {
             background-color: #04050a;
@@ -55,10 +57,18 @@
 
             <!-- Server Link & Clock -->
             <div class="flex items-center gap-4 text-xs font-mono">
+                <div id="qr-admin-wrap" class="hidden items-center gap-2" title="Flashez pour ouvrir ce serveur">
+                    <div id="qr-admin" class="bg-white p-1 rounded-lg" style="width:52px;height:52px;"></div>
+                    <div id="qr-admin-url" class="text-[9px] text-cyan-400 font-bold break-all max-w-[140px]"></div>
+                </div>
                 <div class="text-right">
                     <div id="live-clock" class="text-sm font-bold text-white">18:30:15</div>
                     <div id="live-date" class="text-[9px] text-slate-500 uppercase">25 Juillet 2026</div>
                 </div>
+                <button onclick="logoutDevice()" title="Déconnecter cet appareil (retour à l'activation)"
+                        class="px-3 py-2 bg-red-600/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs font-bold uppercase tracking-widest transition-all">
+                    <i class="fa-solid fa-power-off"></i> <span class="hidden sm:inline">Quitter</span>
+                </button>
             </div>
         </div>
     </header>
@@ -413,48 +423,29 @@
                     </div>
                 </div>
 
-                <!-- Global Settings -->
+                <!-- Codes d'activation -->
                 <div class="border-t border-slate-800/80 pt-6 space-y-4">
                     <div>
                         <h3 class="text-sm font-extrabold text-white flex items-center gap-1.5 uppercase tracking-wide font-mono text-fuchsia-400">
-                            <i class="fa-solid fa-sliders text-fuchsia-500"></i> Configuration Système & Wi-Fi
+                            <i class="fa-solid fa-key text-fuchsia-500"></i> Codes d'activation
                         </h3>
+                        <p class="text-[11px] text-slate-500 mt-1">Créez le code à taper sur le téléphone du caissier. Vide = inchangé.</p>
                     </div>
 
-                    <form onsubmit="saveSettings(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-900/40 p-4 border border-slate-800 rounded-2xl font-mono text-xs">
-                        <div class="sm:col-span-2">
-                            <label class="block text-[8px] font-bold text-slate-500 uppercase mb-1">Nom du Cybercafe</label>
-                            <input type="text" id="setting-cyber-name" value="{{ settings.cyber_name }}" required
-                                   class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500">
-                        </div>
+                    <form onsubmit="saveSettings(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-900/40 p-4 border border-slate-800 rounded-2xl font-mono text-xs">
                         <div>
-                            <label class="block text-[8px] font-bold text-slate-500 uppercase mb-1">SSID WiFi (Routeur)</label>
-                            <input type="text" id="setting-wifi-ssid" value="{{ settings.wifi_ssid }}" required
-                                   class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500 font-mono">
-                        </div>
-                        <div>
-                            <label class="block text-[8px] font-bold text-slate-500 uppercase mb-1">Clé WiFi</label>
-                            <input type="text" id="setting-wifi-password" value="{{ settings.wifi_password }}" required
-                                   class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500 font-mono">
-                        </div>
-                        <div class="sm:col-span-2">
-                            <label class="block text-[8px] font-bold text-slate-500 uppercase mb-1">Tarif de Base (CFA / H)</label>
-                            <input type="number" id="setting-hourly-rate" value="{{ settings.hourly_rate }}" required
-                                   class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500 font-bold">
-                        </div>
-                        <div class="sm:col-span-2">
                             <label class="block text-[8px] font-bold text-cyan-400 uppercase mb-1">Code Caissier (à taper sur son téléphone)</label>
                             <input type="text" id="setting-cashier-password" placeholder="Vide = inchangé" autocomplete="off"
                                    class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-cyan-500 font-mono">
                         </div>
-                        <div class="sm:col-span-2">
+                        <div>
                             <label class="block text-[8px] font-bold text-fuchsia-400 uppercase mb-1">Nouveau Code Propriétaire (vide = inchangé)</label>
                             <input type="password" id="setting-admin-password" placeholder="Vide = inchangé" autocomplete="new-password"
                                    class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-fuchsia-500 font-mono">
                         </div>
-                        <div class="sm:col-span-4 flex items-end">
+                        <div class="sm:col-span-2 flex items-end">
                             <button type="submit" id="btn-save-settings" class="w-full py-2.5 bg-gradient-to-r from-fuchsia-600 to-fuchsia-500 text-white font-bold rounded-lg text-xs uppercase tracking-widest transition-all border border-fuchsia-500/20 shadow">
-                                <i class="fa-solid fa-save"></i> Enregistrer
+                                <i class="fa-solid fa-save"></i> Enregistrer les codes
                             </button>
                         </div>
                     </form>
@@ -855,20 +846,19 @@
             if (el) el.classList.toggle('hidden');
         }
 
-        // Sauvegarde des paramètres système + codes d'activation (vide = inchangé)
+        // Sauvegarde des codes d'activation (vide = inchangé)
         async function saveSettings(e) {
             e.preventDefault();
             const btn = document.getElementById('btn-save-settings');
-            const payload = {
-                cyber_name: document.getElementById('setting-cyber-name').value.trim(),
-                wifi_ssid: document.getElementById('setting-wifi-ssid').value.trim(),
-                wifi_password: document.getElementById('setting-wifi-password').value.trim(),
-                hourly_rate: document.getElementById('setting-hourly-rate').value.trim()
-            };
+            const payload = {};
             const cashierCode = document.getElementById('setting-cashier-password').value.trim();
             const adminCode = document.getElementById('setting-admin-password').value.trim();
             if (cashierCode) payload.cashier_password = cashierCode;
             if (adminCode) payload.admin_password = adminCode;
+            if (Object.keys(payload).length === 0) {
+                showToast("Rien à enregistrer (codes vides).");
+                return;
+            }
             btn.disabled = true;
             try {
                 const response = await fetch('/api/settings', {
@@ -888,6 +878,33 @@
                 btn.disabled = false;
             }
         }
+
+        // Déconnexion : oublie le rôle de cet appareil puis retour à l'activation
+        async function logoutDevice() {
+            if (!confirm("Déconnecter cet appareil ? Il faudra ressaisir le code d'activation.")) return;
+            try {
+                await fetch('/api/forget-role', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            } catch (e) { /* on redirige quand même */ }
+            window.location.href = '/role-setup';
+        }
+
+        // QR de l'URL serveur (dynamique, admin uniquement ici)
+        document.addEventListener("DOMContentLoaded", async () => {
+            try {
+                const res = await fetch('/api/server-ip');
+                const data = await res.json();
+                if (!data.url || (data.lan_ip && data.lan_ip.indexOf('127.') === 0)) return;
+                const el = document.getElementById('qr-admin');
+                if (el && typeof QRCode !== 'undefined') {
+                    el.innerHTML = '';
+                    new QRCode(el, { text: data.url, width: 44, height: 44, correctLevel: QRCode.CorrectLevel.M });
+                    document.getElementById('qr-admin-url').textContent = data.url;
+                    const wrap = document.getElementById('qr-admin-wrap');
+                    wrap.classList.remove('hidden');
+                    wrap.classList.add('flex');
+                }
+            } catch (e) { /* hors-ligne : silencieux */ }
+        });
 
         // Show customizable Toast
         function showToast(message) {

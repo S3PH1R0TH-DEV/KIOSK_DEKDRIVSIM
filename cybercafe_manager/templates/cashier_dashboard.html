@@ -49,6 +49,10 @@
                     <div id="live-clock" class="text-sm font-bold text-white">18:30:15</div>
                     <div id="live-date" class="text-[9px] text-slate-500 uppercase">25 Juillet 2026</div>
                 </div>
+                <button onclick="logoutDevice()" title="Déconnecter cet appareil (retour à l'activation)"
+                        class="px-3 py-2 bg-red-600/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl text-xs font-bold uppercase tracking-widest transition-all">
+                    <i class="fa-solid fa-power-off"></i> <span class="hidden sm:inline">Quitter</span>
+                </button>
             </div>
         </div>
     </header>
@@ -327,6 +331,15 @@
             document.getElementById('toast-message').textContent = message;
             toast.classList.remove('hidden');
             setTimeout(() => { toast.classList.add('hidden'); }, 3000);
+        }
+
+        // Déconnexion : oublie le rôle de cet appareil puis retour à l'activation
+        async function logoutDevice() {
+            if (!confirm("Déconnecter cet appareil ? Il faudra ressaisir le code d'activation.")) return;
+            try {
+                await fetch('/api/forget-role', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            } catch (e) { /* on redirige quand même */ }
+            window.location.href = '/role-setup';
         }
 
         function startClock() {

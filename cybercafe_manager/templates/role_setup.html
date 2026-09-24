@@ -8,6 +8,8 @@
     <script src="/static/vendor/tailwind.min.js"></script>
     <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="/static/vendor/fontawesome/css/all.min.css">
+    <!-- QRCode local (flasher l'URL du serveur depuis un autre appareil) -->
+    <script src="/static/vendor/qrcode.min.js"></script>
     <style>
         body {
             background: radial-gradient(circle at center, #120e2e 0%, #04050a 100%);
@@ -87,12 +89,39 @@
             </button>
         </form>
 
+        <!-- QR serveur : flasher depuis un autre appareil (URL seule, aucun code) -->
+        <div id="qr-block" class="hidden w-full mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800 items-center gap-4">
+            <div id="qr-server" class="shrink-0 mx-auto bg-white p-2 rounded-lg" style="width:148px;height:148px;"></div>
+            <div class="text-center mt-2">
+                <div class="text-[10px] text-slate-500 uppercase tracking-widest font-mono">Flashez pour ouvrir ce serveur</div>
+                <div id="qr-server-url" class="text-xs text-cyan-400 font-mono font-bold break-all"></div>
+            </div>
+        </div>
+
         <div class="mt-8 border-t border-slate-800/80 pt-4 w-full text-[10px] text-slate-500 uppercase tracking-widest font-mono">
             IP Appareil : {{ client_ip }}
         </div>
     </div>
 
     <script>
+        // QR de l'URL serveur (dynamique : suit l'IP du moment, utile si DHCP change)
+        (async function renderServerQR() {
+            try {
+                const res = await fetch('/api/server-ip');
+                const data = await res.json();
+                if (!data.url || (data.lan_ip && data.lan_ip.indexOf('127.') === 0)) return;
+                const el = document.getElementById('qr-server');
+                if (el && typeof QRCode !== 'undefined') {
+                    el.innerHTML = '';
+                    new QRCode(el, { text: data.url, width: 132, height: 132, correctLevel: QRCode.CorrectLevel.M });
+                    document.getElementById('qr-server-url').textContent = data.url;
+                    const block = document.getElementById('qr-block');
+                    block.classList.remove('hidden');
+                    block.classList.add('flex', 'flex-col');
+                }
+            } catch (e) { /* hors-ligne : silencieux */ }
+        })();
+
         async function submitModeClient() {
             const ip = document.getElementById('client-server-ip').value.trim();
             const btn = document.getElementById('btn-mode-client');

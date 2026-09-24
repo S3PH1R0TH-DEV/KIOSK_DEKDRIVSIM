@@ -1248,6 +1248,24 @@ def role_setup():
     return render_template('role_setup.html', client_ip=client_ip, reveal=reveal,
                            is_local=is_local)
 
+@app.route('/api/forget-role', methods=['POST'])
+def api_forget_role():
+    # Deconnexion : oublie le role memorise de CET appareil (retour a l'activation).
+    # On ne peut deconnecter que soi-meme (remote_addr par defaut).
+    data = request.get_json(silent=True) or {}
+    client_ip = (data.get('ip') or request.remote_addr or '').strip()
+    if not client_ip:
+        return jsonify({'success': False, 'message': 'Appareil inconnu'}), 400
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM device_roles WHERE ip_address = ?", (client_ip,))
+    forgotten = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    if forgotten:
+        logger.info(f"[AUTH] Deconnexion appareil IP={client_ip}")
+    return jsonify({'success': True, 'message': 'Appareil deconnecte.'})
+
 @app.route('/admin')
 def admin_dashboard():
     client_ip = request.remote_addr
